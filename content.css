@@ -1,0 +1,254 @@
+/* AI Form Solver Extension - Complete CSS */
+
+/* Notification styles */
+.ai-form-notification {
+  position: fixed !important;
+  top: 20px !important;
+  right: 20px !important;
+  padding: 16px 24px !important;
+  border-radius: 12px !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  z-index: 2147483647 !important;
+  max-width: 350px !important;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.2) !important;
+  animation: slideIn 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55) !important;
+  transition: all 0.3s ease !important;
+  cursor: pointer !important;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(120%) !important;
+    opacity: 0 !important;
+  }
+  to {
+    transform: translateX(0) !important;
+    opacity: 1 !important;
+  }
+}
+
+.ai-form-notification[data-type="success"] {
+  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%) !important;
+  color: white !important;
+  border: 1px solid #388E3C !important;
+}
+
+.ai-form-notification[data-type="error"] {
+  background: linear-gradient(135deg, #f44336 0%, #e53935 100%) !important;
+  color: white !important;
+  border: 1px solid #c62828 !important;
+}
+
+.ai-form-notification[data-type="info"] {
+  background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%) !important;
+  color: white !important;
+  border: 1px solid #0D47A1 !important;
+}
+
+/* Field highlight styles */
+.ai-form-highlight {
+  outline: 3px solid #4CAF50 !important;
+  outline-offset: 3px !important;
+  animation: pulseGreen 2s infinite !important;
+  box-shadow: 0 0 20px rgba(76, 175, 80, 0.6) !important;
+  background-color: rgba(76, 175, 80, 0.05) !important;
+  transition: all 0.3s ease !important;
+}
+
+@keyframes pulseGreen {
+  0% {
+    outline-color: #4CAF50;
+    box-shadow: 0 0 20px rgba(76, 175, 80, 0.6);
+  }
+  50% {
+    outline-color: #81C784;
+    box-shadow: 0 0 35px rgba(76, 175, 80, 0.9);
+  }
+  100% {
+    outline-color: #4CAF50;
+    box-shadow: 0 0 20px rgba(76, 175, 80, 0.6);
+  }
+}
+
+/* Google Forms specific highlighting */
+.freebirdFormviewerComponentsQuestionBaseRoot.ai-form-highlight,
+.Qr7Oae.ai-form-highlight {
+  background-color: rgba(76, 175, 80, 0.08) !important;
+  border-left: 5px solid #4CAF50 !important;
+  padding-left: 15px !important;
+  margin-left: -20px !important;
+  transition: all 0.3s ease !important;
+}
+
+/* Processing state */
+.ai-form-processing {
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+.ai-form-processing::after {
+  content: '' !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: -100% !important;
+  width: 100% !important;
+  height: 100% !important;
+  background: linear-gradient(90deg, transparent, rgba(33, 150, 243, 0.4), transparent) !important;
+  animation: shimmer 1.5s infinite !important;
+}
+
+@keyframes shimmer {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+/* Filled field indicator */
+.ai-form-filled {
+  outline: 3px solid #4CAF50 !important;
+  outline-offset: 3px !important;
+  background-color: rgba(76, 175, 80, 0.1) !important;
+  transition: all 0.5s ease !important;
+  animation: fillSuccess 0.6s ease-out !important;
+}
+
+@keyframes fillSuccess {
+  0% {
+    transform: scale(1);
+    background-color: rgba(76, 175, 80, 0);
+  }
+  50% {
+    transform: scale(1.02);
+    background-color: rgba(76, 175, 80, 0.2);
+  }
+  100% {
+    transform: scale(1);
+    background-color: rgba(76, 175, 80, 0.1);
+  }
+}
+
+/* Learning mode overlay */
+.ai-form-learning-overlay {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  background: rgba(0, 0, 0, 0.85) !important;
+  z-index: 2147483646 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  backdrop-filter: blur(5px) !important;
+}
+
+.ai-form-learning-message {
+  background: linear-gradient(135deg, #2196F3, #1976D2) !important;
+  color: white !important;
+  padding: 30px 50px !important;
+  border-radius: 20px !important;
+  font-size: 20px !important;
+  font-weight: 600 !important;
+  text-align: center !important;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4) !important;
+  animation: bounceIn 0.6s ease-out !important;
+}
+
+@keyframes bounceIn {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Submit button highlight during learning */
+button:hover, 
+input[type="submit"]:hover,
+[role="button"]:hover {
+  cursor: pointer !important;
+}
+
+.ai-form-potential-submit {
+  outline: 3px dashed #FF9800 !important;
+  outline-offset: 5px !important;
+  animation: submitPulse 1s infinite !important;
+}
+
+@keyframes submitPulse {
+  0% {
+    outline-color: #FF9800;
+    outline-offset: 5px;
+  }
+  50% {
+    outline-color: #FFC107;
+    outline-offset: 8px;
+  }
+  100% {
+    outline-color: #FF9800;
+    outline-offset: 5px;
+  }
+}
+
+/* Loading spinner */
+.ai-form-spinner {
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  width: 60px !important;
+  height: 60px !important;
+  z-index: 2147483647 !important;
+}
+
+.ai-form-spinner::after {
+  content: '' !important;
+  display: block !important;
+  width: 50px !important;
+  height: 50px !important;
+  margin: 5px !important;
+  border-radius: 50% !important;
+  border: 5px solid #f3f3f3 !important;
+  border-top: 5px solid #2196F3 !important;
+  animation: spin 1s linear infinite !important;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Tooltip for field information */
+.ai-form-tooltip {
+  position: absolute !important;
+  background: #333 !important;
+  color: white !important;
+  padding: 8px 12px !important;
+  border-radius: 6px !important;
+  font-size: 12px !important;
+  white-space: nowrap !important;
+  z-index: 2147483647 !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+  transition: opacity 0.3s ease !important;
+}
+
+.ai-form-tooltip.show {
+  opacity: 1 !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+  .ai-form-notification {
+    right: 10px !important;
+    left: 10px !important;
+    max-width: calc(100% - 20px) !important;
+  }
+}
