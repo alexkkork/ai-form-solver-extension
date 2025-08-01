@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      width: 380px;
+      height: 600px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    /* Animated background */
+    body::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
+      background-size: 20px 20px;
+      animation: moveGrid 20s linear infinite;
+      z-index: 0;
+    }
+    
+    @keyframes moveGrid {
+      0% { transform: translate(0, 0); }
+      100% { transform: translate(20px, 20px); }
+    }
+    
+    .container {
+      position: relative;
+      z-index: 1;
+      padding: 24px;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .header {
+      text-align: center;
+      margin-bottom: 24px;
+      animation: fadeInDown 0.6s ease-out;
+    }
+    
+    @keyframes fadeInDown {
+      from {
+        opacity: 0;
+        transform: translateY(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    .logo {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      font-size: 28px;
+      font-weight: 800;
+      margin-bottom: 8px;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    
+    .logo-icon {
+      width: 40px;
+      height: 40px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    
+    .subtitle {
+      font-size: 14px;
+      opacity: 0.9;
+      font-weight: 400;
+    }
+    
+    .section {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 16px;
+      backdrop-filter: blur(20px);
+      box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+      animation: fadeInUp 0.6s ease-out;
+      animation-fill-mode: both;
+    }
+    
+    .section:nth-child(2) { animation-delay: 0.1s; }
+    .section:nth-child(3) { animation-delay: 0.2s; }
+    .section:nth-child(4) { animation-delay: 0.3s; }
+    
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    .section h3 {
+      margin: 0 0 16px 0;
+      font-size: 16px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .section-icon {
+      width: 20px;
+      height: 20px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+    }
+    
+    .ai-provider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+      padding: 12px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 12px;
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+    
+    .ai-provider:hover {
+      background: rgba(255,255,255,0.1);
+      transform: translateX(4px);
+    }
+    
+    .ai-provider input[type="radio"] {
+      width: 20px;
+      height: 20px;
+      accent-color: #ffffff;
+      cursor: pointer;
+    }
+    
+    .ai-provider label {
+      font-size: 14px;
+      cursor: pointer;
+      flex: 1;
+      font-weight: 500;
+    }
+    
+    .provider-badge {
+      background: rgba(255,255,255,0.2);
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    
+    .api-key-input {
+      width: 100%;
+      padding: 12px 16px;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 10px;
+      font-size: 14px;
+      margin-top: 8px;
+      background: rgba(255,255,255,0.1);
+      color: white;
+      backdrop-filter: blur(10px);
+      transition: all 0.3s ease;
+    }
+    
+    .api-key-input:focus {
+      outline: none;
+      border-color: rgba(255,255,255,0.4);
+      background: rgba(255,255,255,0.15);
+      box-shadow: 0 0 0 3px rgba(255,255,255,0.1);
+    }
+    
+    .api-key-input::placeholder {
+      color: rgba(255,255,255,0.6);
+    }
+    
+    .button {
+      width: 100%;
+      padding: 14px;
+      background: rgba(255, 255, 255, 0.2);
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 8px;
+      color: white;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 8px;
+    }
+    
+    .button:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: translateY(-1px);
+    }
+    
+    .button.primary {
+      background: #4CAF50;
+      border-color: #4CAF50;
+    }
+    
+    .button.primary:hover {
+      background: #45a049;
+    }
+    
+    .button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .status {
+      font-size: 12px;
+      text-align: center;
+      margin-top: 8px;
+      padding: 8px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.1);
+    }
+    
+    .status.success {
+      background: rgba(76, 175, 80, 0.3);
+    }
+    
+    .status.error {
+      background: rgba(244, 67, 54, 0.3);
+    }
+    
+    .learning-info {
+      font-size: 12px;
+      opacity: 0.8;
+      margin-top: 8px;
+      padding: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">
+        <div class="logo-icon">🤖</div>
+        <span>AI Form Solver</span>
+      </div>
+      <div class="subtitle">Solve any form instantly with AI magic ✨</div>
+    </div>
+
+    <div class="section">
+      <h3><span class="section-icon">🎯</span> AI Settings</h3>
+      <div class="ai-provider">
+        <span style="font-size: 18px;">✨</span>
+        <label style="font-weight: 600;">Powered by Google Gemini AI</label>
+        <span class="provider-badge">Pro Vision</span>
+      </div>
+      <input type="password" id="apiKey" class="api-key-input" placeholder="Gemini API key (optional override)">
+    </div>
+
+    <div class="section">
+      <h3><span class="section-icon">🚀</span> Actions</h3>
+      <button id="solveForm" class="button primary">
+        <span style="font-size: 18px;">✨</span> Solve Current Form
+      </button>
+      <button id="detectFields" class="button">
+        <span style="font-size: 16px;">🔍</span> Detect Form Fields
+      </button>
+      <button id="learnSubmit" class="button">
+        <span style="font-size: 16px;">🎓</span> Learn Submit Button
+      </button>
+    </div>
+
+    <div class="section">
+      <h3><span class="section-icon">📊</span> Learning Status</h3>
+      <div id="formsProcessed" class="learning-info">
+        <span style="color: #4CAF50;">●</span> Forms processed: <strong>0</strong>
+      </div>
+      <div id="submitPattern" class="learning-info">
+        <span style="color: #FFC107;">●</span> Submit pattern: <strong>Learning...</strong>
+      </div>
+    </div>
+
+    <div id="status" class="status" style="display: none;"></div>
+    
+    <!-- Error Reporting Button -->
+    <button id="reportError" class="button" style="margin-top: 12px; background: rgba(244, 67, 54, 0.2); border-color: rgba(244, 67, 54, 0.3); display: none;">
+      <span style="font-size: 16px;">🐛</span> Report an Error
+    </button>
+    
+    <!-- Admin Login (Hidden by default) -->
+    <div id="adminSection" style="margin-top: auto; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+      <div style="font-size: 11px; opacity: 0.5; text-align: center; cursor: pointer;" id="adminToggle">Admin Access</div>
+      <div id="adminLogin" style="display: none; margin-top: 12px;">
+        <input type="password" id="adminPasscode" class="api-key-input" placeholder="Enter admin passcode" style="margin-bottom: 8px;">
+        <button id="adminLoginBtn" class="button" style="background: rgba(156, 39, 176, 0.3); border-color: rgba(156, 39, 176, 0.4);">
+          <span style="font-size: 16px;">🔐</span> Admin Login
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
