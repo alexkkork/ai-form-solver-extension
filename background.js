@@ -8,7 +8,7 @@ chrome.runtime.onInstalled.addListener((details) => {
   // Set default storage values
   chrome.storage.sync.get(['geminiApiKey'], (result) => {
     const defaults = {
-      geminiApiKey: result.geminiApiKey || '',
+      geminiApiKey: result.geminiApiKey || 'AIzaSyBQ5hu2_bAVUD1PqPA-UuzOqPvBx_0Ie4Q',
       formsProcessed: 0,
       submitPatterns: [],
       lastUsed: Date.now()
