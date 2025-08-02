@@ -575,77 +575,106 @@ console.log('AI Form Solver: Loading extension...');
     });
     
     // 5. Interactive/Special Widgets (Card arrangement, Drag & Drop, etc)
+    // Only detect actual interactive widgets, not regular inputs
     const interactiveWidgetSelectors = [
-      // Card arrangement widgets
+      // Card arrangement widgets (must have perseus-widget class)
       '.perseus-widget-orderer',
       '.perseus-widget-sorter',
-      '.card-container',
-      '[class*="sortable"]',
-      '[class*="draggable"]',
-      // Number line widgets
+      '.perseus-widget.orderer',
+      '.perseus-widget.sorter',
+      // Number line widgets (specific Perseus widgets only)
       '.perseus-widget-number-line',
-      '.number-line-container',
-      // Graph/Drawing widgets
+      '.perseus-widget.number-line',
+      // Graph/Drawing widgets (actual interactive graphs)
       '.perseus-widget-interactive-graph',
       '.perseus-widget-plotter',
-      '.graphie-container',
-      // Matrix widgets
+      '.perseus-widget.interactive-graph',
+      '.graphie-container canvas', // Canvas indicates actual drawing widget
+      // Matrix widgets (multi-cell input)
       '.perseus-widget-matrix',
-      '.matrix-input',
-      // Table widgets
+      '.perseus-widget.matrix',
+      // Table widgets (multi-cell)
       '.perseus-widget-table',
-      '.table-input',
+      '.perseus-widget.table',
       // Categorizer widgets
       '.perseus-widget-categorizer',
+      '.perseus-widget.categorizer',
       // Matcher widgets
-      '.perseus-widget-matcher'
+      '.perseus-widget-matcher',
+      '.perseus-widget.matcher'
     ];
     
+    const processedInteractive = new Set();
     interactiveWidgetSelectors.forEach(selector => {
       try {
         const widgets = document.querySelectorAll(selector);
         widgets.forEach((widget, index) => {
-          if (isElementVisible(widget)) {
-            let questionText = '';
-            let widgetType = 'unknown';
-            
-            // Identify widget type from class
-            const classList = widget.className;
-            if (classList.includes('orderer') || classList.includes('sorter') || classList.includes('card')) {
-              widgetType = 'card-arrangement';
-            } else if (classList.includes('number-line')) {
-              widgetType = 'number-line';
-            } else if (classList.includes('graph') || classList.includes('plotter')) {
-              widgetType = 'graph';
-            } else if (classList.includes('matrix')) {
-              widgetType = 'matrix';
-            } else if (classList.includes('table')) {
-              widgetType = 'table';
-            } else if (classList.includes('categorizer')) {
-              widgetType = 'categorizer';
-            } else if (classList.includes('matcher')) {
-              widgetType = 'matcher';
-            }
-            
-            // Find question text
-            const container = widget.closest('.perseus-widget-container, .task-container');
-            if (container) {
-              const questionEl = container.querySelector('.perseus-renderer > p, .paragraph, [class*="question"]');
-              if (questionEl) {
-                questionText = questionEl.textContent.trim();
-              }
-            }
-            
-            khanFields.push({
-              element: widget,
-              type: 'khan-interactive',
-              label: questionText || `Interactive Widget (${widgetType})`,
-              id: `khan_interactive_${widgetType}_${index}`,
-              widgetType: widgetType,
-              khanAcademy: true,
-              required: true
-            });
+          // Skip if already processed or not visible
+          if (processedInteractive.has(widget) || !isElementVisible(widget)) {
+            return;
           }
+          
+          // Double-check this is actually an interactive widget, not a regular input
+          const hasInput = widget.querySelector('input[type="text"], input[type="number"], textarea');
+          const hasCanvas = widget.querySelector('canvas');
+          const hasDraggable = widget.querySelector('[draggable="true"], .ui-draggable, .draggable-item');
+          const hasSortable = widget.querySelector('.ui-sortable, .sortable-item');
+          
+          // Skip if it's just a regular input field
+          if (hasInput && !hasCanvas && !hasDraggable && !hasSortable) {
+            console.log('⚠️ Skipping false positive interactive widget (contains regular input)');
+            return;
+          }
+          
+          processedInteractive.add(widget);
+          
+          let questionText = '';
+          let widgetType = 'unknown';
+          
+          // Identify widget type from class and structure
+          const classList = widget.className.toLowerCase();
+          if (classList.includes('orderer') || classList.includes('sorter')) {
+            widgetType = 'card-arrangement';
+          } else if (classList.includes('number-line')) {
+            widgetType = 'number-line';
+          } else if (classList.includes('graph') || classList.includes('plotter') || hasCanvas) {
+            widgetType = 'graph';
+          } else if (classList.includes('matrix')) {
+            widgetType = 'matrix';
+          } else if (classList.includes('table')) {
+            widgetType = 'table';
+          } else if (classList.includes('categorizer')) {
+            widgetType = 'categorizer';
+          } else if (classList.includes('matcher')) {
+            widgetType = 'matcher';
+          }
+          
+          // Only add if we identified a valid interactive widget type
+          if (widgetType === 'unknown') {
+            console.log('⚠️ Unknown widget type, skipping');
+            return;
+          }
+          
+          // Find question text
+          const container = widget.closest('.perseus-widget-container, .task-container');
+          if (container) {
+            const questionEl = container.querySelector('.perseus-renderer > p, .paragraph, [class*="question"]');
+            if (questionEl) {
+              questionText = questionEl.textContent.trim();
+            }
+          }
+          
+          console.log(`✨ Found interactive widget: ${widgetType}`);
+          
+          khanFields.push({
+            element: widget,
+            type: 'khan-interactive',
+            label: questionText || `Interactive Widget (${widgetType})`,
+            id: `khan_interactive_${widgetType}_${index}`,
+            widgetType: widgetType,
+            khanAcademy: true,
+            required: true
+          });
         });
       } catch (e) {
         console.log('Error with interactive widget selector:', selector, e);
