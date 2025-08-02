@@ -245,151 +245,291 @@ console.log('AI Form Solver: Loading extension...');
     return 'Google Form Field';
   }
   
-  // Detect Khan Academy specific fields
+  // Check if this is Khan Academy
+  function isKhanAcademy() {
+    return window.location.hostname.includes('khanacademy.org') || 
+           window.location.hostname.includes('ka-perseus-exercises') ||
+           window.location.hostname.includes('khan-exercises') ||
+           document.querySelector('.perseus-widget') !== null;
+  }
+  
+  // Detect Khan Academy specific fields using Perseus framework selectors
   function detectKhanAcademyFields() {
     const khanFields = [];
+    console.log('🎓 Starting Khan Academy Perseus field detection...');
     
-    // Math input fields
-    const mathInputs = document.querySelectorAll(`
-      .perseus-input,
-      .perseus-number-input input,
-      .perseus-text-input input,
-      .answer-input,
-      input[aria-label*="answer"],
-      input[placeholder*="answer"],
-      .expression-editor-box,
-      .math-input
-    `);
+    // 1. Math/Numeric Input Fields (Perseus widgets)
+    const mathInputSelectors = [
+      // Perseus specific selectors
+      '.perseus-widget-numeric-input input',
+      '.perseus-widget-input-number input',
+      '.perseus-widget-expression input',
+      '.perseus-widget-simple-expression-editor input',
+      '.perseus-input',
+      '.perseus-number-input input',
+      '.perseus-text-input input',
+      '.perseus-math-input input',
+      // Generic answer inputs
+      'input[aria-label*="answer" i]',
+      'input[placeholder*="answer" i]',
+      'input[aria-label*="your answer" i]',
+      // Math specific
+      '.math-input input',
+      '.expression-editor input',
+      '.answer-input',
+      // Task container inputs
+      '.task-container input[type="text"]',
+      '.task-container input[type="number"]',
+      '.perseus-widget input[type="text"]',
+      '.perseus-widget input[type="number"]'
+    ];
     
-    mathInputs.forEach((input, index) => {
-      if (!input.disabled && isElementVisible(input)) {
-        // Find the question text
+    // Collect all unique math inputs
+    const processedInputs = new Set();
+    mathInputSelectors.forEach(selector => {
+      try {
+        const inputs = document.querySelectorAll(selector);
+        inputs.forEach((input, index) => {
+          if (!processedInputs.has(input) && !input.disabled && isElementVisible(input)) {
+            processedInputs.add(input);
+            
+            // Find question text from Perseus structure
+            let questionText = '';
+            
+            // Strategy 1: Look for Perseus widget container
+            let widgetContainer = input.closest('.perseus-widget, .perseus-widget-container');
+            if (widgetContainer) {
+              // Look for Perseus paragraph or renderer
+              const paragraphs = widgetContainer.querySelectorAll('.perseus-renderer > p, .paragraph, [class*="paragraph"]');
+              if (paragraphs.length > 0) {
+                questionText = Array.from(paragraphs).map(p => p.textContent.trim()).join(' ');
+              }
+            }
+            
+            // Strategy 2: Look in task container
+            if (!questionText) {
+              const taskContainer = input.closest('.task-container, .assessment-item-container');
+              if (taskContainer) {
+                const questionElements = taskContainer.querySelectorAll('p:not(:has(input)), .paragraph, [class*="question"]');
+                for (const el of questionElements) {
+                  const text = el.textContent.trim();
+                  if (text.length > 10 && !el.querySelector('input')) {
+                    questionText = text;
+                    break;
+                  }
+                }
+              }
+            }
+            
+            // Strategy 3: Look for nearby text
+            if (!questionText) {
+              const parent = input.parentElement;
+              for (let i = 0; i < 5 && parent; i++) {
+                const texts = parent.querySelectorAll('p, span, div');
+                for (const el of texts) {
+                  const text = el.textContent.trim();
+                  if (text.length > 10 && text.length < 500 && !el.querySelector('input')) {
+                    questionText = text;
+                    break;
+                  }
+                }
+                if (questionText) break;
+              }
+            }
+            
+            khanFields.push({
+              element: input,
+              type: 'khan-math-input',
+              label: questionText || `Math Answer ${khanFields.filter(f => f.type === 'khan-math-input').length + 1}`,
+              id: input.id || `khan_math_${index}`,
+              khanAcademy: true,
+              required: true,
+              widgetType: 'perseus-numeric-input'
+            });
+          }
+        });
+      } catch (e) {
+        console.log('Error with selector:', selector, e);
+      }
+    });
+    
+    // 2. Multiple Choice (Perseus Radio Widget)
+    const radioSelectors = [
+      // Perseus specific radio selectors
+      '.perseus-widget-radio input[type="radio"]',
+      '.perseus-widget-radio-choice input[type="radio"]',
+      '.perseus-radio-option input[type="radio"]',
+      '.perseus-radio input[type="radio"]',
+      // Generic radio selectors
+      '.radio input[type="radio"]',
+      'input[type="radio"][name*="perseus"]',
+      '.task-container input[type="radio"]',
+      // Label-based selectors
+      'label.perseus-radio-option',
+      'label[class*="radio-choice"]',
+      '.answer-choice input[type="radio"]'
+    ];
+    
+    // Collect all radio groups
+    const radioGroups = {};
+    const processedRadios = new Set();
+    
+    radioSelectors.forEach(selector => {
+      try {
+        const elements = document.querySelectorAll(selector);
+        elements.forEach(element => {
+          let radio = element;
+          if (element.tagName === 'LABEL') {
+            radio = element.querySelector('input[type="radio"]');
+          }
+          
+          if (radio && !processedRadios.has(radio) && !radio.disabled && isElementVisible(radio)) {
+            processedRadios.add(radio);
+            
+            const groupName = radio.name || `perseus_group_${Object.keys(radioGroups).length}`;
+            
+            if (!radioGroups[groupName]) {
+              radioGroups[groupName] = {
+                elements: [],
+                options: [],
+                labels: []
+              };
+            }
+            
+            // Get option text - check multiple locations
+            let optionText = '';
+            
+            // Try to find the label
+            const label = radio.closest('label') || 
+                         document.querySelector(`label[for="${radio.id}"]`) ||
+                         radio.parentElement.closest('label');
+            
+            if (label) {
+              // Get text content but exclude the radio button itself
+              const clone = label.cloneNode(true);
+              const radioClone = clone.querySelector('input[type="radio"]');
+              if (radioClone) radioClone.remove();
+              optionText = clone.textContent.trim();
+              radioGroups[groupName].labels.push(label);
+            } else {
+              // Check parent or sibling for text
+              const parent = radio.parentElement;
+              if (parent) {
+                const textNodes = Array.from(parent.childNodes).filter(node => 
+                  node.nodeType === Node.TEXT_NODE && node.textContent.trim()
+                );
+                if (textNodes.length > 0) {
+                  optionText = textNodes.map(n => n.textContent.trim()).join(' ');
+                }
+              }
+            }
+            
+            radioGroups[groupName].elements.push(radio);
+            radioGroups[groupName].options.push(optionText || `Option ${radioGroups[groupName].options.length + 1}`);
+          }
+        });
+      } catch (e) {
+        console.log('Error with radio selector:', selector, e);
+      }
+    });
+    
+    // Process radio groups into fields
+    Object.keys(radioGroups).forEach((groupName, index) => {
+      const group = radioGroups[groupName];
+      if (group.elements.length > 0) {
+        // Find question text
         let questionText = '';
-        let parent = input.closest('.perseus-widget-container, .task-container, .problem-content');
-        if (parent) {
-          const questionEl = parent.querySelector('.paragraph, .perseus-renderer-paragraph, p');
+        
+        // Look for Perseus widget container
+        const widgetContainer = group.elements[0].closest('.perseus-widget, .perseus-widget-container');
+        if (widgetContainer) {
+          const questionEl = widgetContainer.querySelector('.perseus-renderer > p, .paragraph, [class*="paragraph"]:not(label)');
           if (questionEl) {
             questionText = questionEl.textContent.trim();
           }
         }
         
-        // If no question found, look for nearby text
+        // Look in task container
         if (!questionText) {
-          const container = input.closest('[class*="container"], [class*="problem"], [class*="question"]');
-          if (container) {
-            const textNodes = Array.from(container.querySelectorAll('p, span, div')).filter(el => {
-              const text = el.textContent.trim();
-              return text.length > 10 && text.length < 500 && !el.querySelector('input');
-            });
-            if (textNodes.length > 0) {
-              questionText = textNodes[0].textContent.trim();
+          const taskContainer = group.elements[0].closest('.task-container, .assessment-item-container');
+          if (taskContainer) {
+            const paragraphs = taskContainer.querySelectorAll('p:not(:has(input)):not(label p)');
+            for (const p of paragraphs) {
+              const text = p.textContent.trim();
+              if (text.length > 10 && !text.includes('Option')) {
+                questionText = text;
+                break;
+              }
             }
           }
         }
         
         khanFields.push({
-          element: input,
-          type: 'khan-math-input',
-          label: questionText || `Math Answer ${index + 1}`,
-          id: input.id || `khan_math_${index}`,
-          khanAcademy: true,
-          required: true
-        });
-      }
-    });
-    
-    // Multiple choice options
-    const multipleChoice = document.querySelectorAll(`
-      .perseus-radio-option,
-      .radio input[type="radio"],
-      .perseus-widget-radio input[type="radio"],
-      label[class*="choice"],
-      .answer-choice
-    `);
-    
-    // Group radio buttons by name
-    const radioGroups = {};
-    multipleChoice.forEach(radio => {
-      const input = radio.tagName === 'INPUT' ? radio : radio.querySelector('input[type="radio"]');
-      if (input && !input.disabled && isElementVisible(input)) {
-        const name = input.name || 'khan_radio_group';
-        if (!radioGroups[name]) {
-          radioGroups[name] = {
-            elements: [],
-            options: []
-          };
-        }
-        
-        // Get option text
-        let optionText = '';
-        const label = input.closest('label') || input.parentElement;
-        if (label) {
-          optionText = label.textContent.trim();
-        }
-        
-        radioGroups[name].elements.push(input);
-        radioGroups[name].options.push(optionText);
-      }
-    });
-    
-    // Add radio groups as single fields
-    Object.keys(radioGroups).forEach((groupName, index) => {
-      const group = radioGroups[groupName];
-      if (group.elements.length > 0) {
-        // Find question text for this group
-        let questionText = '';
-        const container = group.elements[0].closest('.perseus-widget-container, .task-container');
-        if (container) {
-          const questionEl = container.querySelector('.paragraph, .perseus-renderer-paragraph, p');
-          if (questionEl) {
-            questionText = questionEl.textContent.trim();
-          }
-        }
-        
-        khanFields.push({
-          element: group.elements[0].parentElement.parentElement,
+          element: group.elements[0].closest('.perseus-widget') || group.elements[0].parentElement,
           type: 'khan-multiple-choice',
           label: questionText || `Multiple Choice Question ${index + 1}`,
           id: `khan_mc_${index}`,
+          groupName: groupName,
           options: group.options,
           radioElements: group.elements,
+          labelElements: group.labels,
           khanAcademy: true,
-          required: true
+          required: true,
+          widgetType: 'perseus-radio'
         });
       }
     });
     
-    // Free response text areas
-    const textAreas = document.querySelectorAll(`
-      .perseus-textarea textarea,
-      textarea[aria-label*="answer"],
-      .free-response textarea,
-      .text-response textarea
-    `);
+    // 3. Text Response Areas (Perseus Text Widget)
+    const textAreaSelectors = [
+      '.perseus-widget-text-area textarea',
+      '.perseus-widget textarea',
+      '.perseus-textarea textarea',
+      'textarea[aria-label*="answer" i]',
+      '.free-response textarea',
+      '.text-response textarea',
+      '.task-container textarea'
+    ];
     
-    textAreas.forEach((textarea, index) => {
-      if (!textarea.disabled && isElementVisible(textarea)) {
-        let questionText = '';
-        const container = textarea.closest('.perseus-widget-container, .task-container');
-        if (container) {
-          const questionEl = container.querySelector('.paragraph, .perseus-renderer-paragraph, p');
-          if (questionEl) {
-            questionText = questionEl.textContent.trim();
+    const processedTextAreas = new Set();
+    textAreaSelectors.forEach(selector => {
+      try {
+        const textareas = document.querySelectorAll(selector);
+        textareas.forEach((textarea, index) => {
+          if (!processedTextAreas.has(textarea) && !textarea.disabled && isElementVisible(textarea)) {
+            processedTextAreas.add(textarea);
+            
+            let questionText = '';
+            const widgetContainer = textarea.closest('.perseus-widget, .perseus-widget-container');
+            if (widgetContainer) {
+              const questionEl = widgetContainer.querySelector('.perseus-renderer > p, .paragraph');
+              if (questionEl) {
+                questionText = questionEl.textContent.trim();
+              }
+            }
+            
+            khanFields.push({
+              element: textarea,
+              type: 'khan-text-response',
+              label: questionText || `Text Response ${khanFields.filter(f => f.type === 'khan-text-response').length + 1}`,
+              id: textarea.id || `khan_text_${index}`,
+              khanAcademy: true,
+              required: true,
+              widgetType: 'perseus-text-area'
+            });
           }
-        }
-        
-        khanFields.push({
-          element: textarea,
-          type: 'khan-text-response',
-          label: questionText || `Text Response ${index + 1}`,
-          id: textarea.id || `khan_text_${index}`,
-          khanAcademy: true,
-          required: true
         });
+      } catch (e) {
+        console.log('Error with textarea selector:', selector, e);
       }
     });
     
-    console.log(`🎓 Found ${khanFields.length} Khan Academy fields`);
+    console.log(`🎓 Found ${khanFields.length} Khan Academy Perseus fields:`, {
+      math: khanFields.filter(f => f.type === 'khan-math-input').length,
+      multipleChoice: khanFields.filter(f => f.type === 'khan-multiple-choice').length,
+      textResponse: khanFields.filter(f => f.type === 'khan-text-response').length
+    });
+    
     return khanFields;
   }
   
@@ -1307,6 +1447,97 @@ console.log('AI Form Solver: Loading extension...');
     }
   }
   
+  // Find Khan Academy Check Answer button with Perseus-specific selectors
+  async function findKhanCheckButton() {
+    console.log('🎓 Looking for Khan Academy Check Answer button...');
+    
+    // Perseus-specific selectors based on research
+    const checkSelectors = [
+      'button[data-test-id="exercise-check-answer"]',
+      'button[data-test-id="problem-submit"]',
+      'button[data-test-id="check-answer"]',
+      'button[aria-label*="Check" i]:not(:disabled)',
+      '.task-container button',
+      '.perseus-widget button',
+      'button.kui-button'
+    ];
+    
+    // First try data-test-id selectors
+    for (const selector of checkSelectors.slice(0, 3)) {
+      const button = document.querySelector(selector);
+      if (button && button.offsetParent !== null && !button.disabled) {
+        console.log('✅ Found Check button via selector:', selector);
+        return button;
+      }
+    }
+    
+    // Then try text-based search with Perseus structure in mind
+    const buttons = document.querySelectorAll('button');
+    for (const button of buttons) {
+      const text = button.textContent.trim();
+      const isVisible = button.offsetParent !== null;
+      const isEnabled = !button.disabled;
+      
+      // Check for "Check", "Check Answer", "Check your answer" etc.
+      if (isVisible && isEnabled && 
+          (text === 'Check' || 
+           text === 'Check Answer' || 
+           text === 'Check your answer' ||
+           /^Check(\s+Answer)?$/i.test(text))) {
+        console.log('✅ Found Check button by text:', text);
+        return button;
+      }
+    }
+    
+    return null;
+  }
+  
+  // Find Khan Academy Next Question button with Perseus-specific selectors
+  async function findKhanNextButton() {
+    console.log('🎓 Looking for Khan Academy Next Question button...');
+    
+    // Perseus-specific selectors for Next button
+    const nextSelectors = [
+      'button[data-test-id="next-question"]',
+      'button[data-test-id="next-button"]',
+      'button[data-test-id="exercise-next"]',
+      'button[aria-label*="Next" i]:not(:disabled)',
+      '.task-container button',
+      '.perseus-widget button',
+      'button.kui-button'
+    ];
+    
+    // First try data-test-id selectors
+    for (const selector of nextSelectors.slice(0, 3)) {
+      const button = document.querySelector(selector);
+      if (button && button.offsetParent !== null && !button.disabled) {
+        console.log('✅ Found Next button via selector:', selector);
+        return button;
+      }
+    }
+    
+    // Then try text-based search
+    const buttons = document.querySelectorAll('button');
+    for (const button of buttons) {
+      const text = button.textContent.trim();
+      const isVisible = button.offsetParent !== null;
+      const isEnabled = !button.disabled;
+      
+      // Check for various Next patterns
+      if (isVisible && isEnabled && 
+          (text === 'Next' || 
+           text === 'Next question' || 
+           text === 'Next Question' ||
+           /Next(\s+question)?/i.test(text)) &&
+          !text.includes('Check')) {
+        console.log('✅ Found Next button by text:', text);
+        return button;
+      }
+    }
+    
+    return null;
+  }
+  
   // Find Submit button on the page  
   async function findSubmitButton() {
     const submitSelectors = [
@@ -1541,28 +1772,41 @@ Example: [{"label": "Name", "value": "Alex Johnson"}, {"label": "Email", "value"
     console.log(`📝 Filling ${aiResponses.length} responses into ${fields.length} fields`);
     
     // For Khan Academy, handle special field types
-    if (window.location.hostname.includes('khanacademy.org')) {
-      console.log('🎓 Khan Academy detected - using special educational form handling');
+    if (isKhanAcademy()) {
+      console.log('🎓 Khan Academy detected - using Perseus framework form handling');
       
+      // For Khan Academy, we need to be more careful about field matching
       for (const response of aiResponses) {
         try {
-          const field = fields.find(f => 
-            f.label.toLowerCase().includes(response.label.toLowerCase()) ||
-            response.label.toLowerCase().includes(f.label.toLowerCase()) ||
-            f.label.includes(response.label) ||
-            response.label.includes(f.label)
-          );
+          // Find matching field with more flexible matching
+          const field = fields.find(f => {
+            const fieldLabel = f.label.toLowerCase().trim();
+            const responseLabel = response.label.toLowerCase().trim();
+            
+            // Try various matching strategies
+            return fieldLabel === responseLabel ||
+                   fieldLabel.includes(responseLabel) ||
+                   responseLabel.includes(fieldLabel) ||
+                   // Match partial question text
+                   (fieldLabel.length > 20 && responseLabel.length > 20 && 
+                    (fieldLabel.includes(responseLabel.substring(0, 20)) ||
+                     responseLabel.includes(fieldLabel.substring(0, 20)))) ||
+                   // Match by field type if labels are generic
+                   (f.type === 'khan-math-input' && response.label.includes('Math')) ||
+                   (f.type === 'khan-multiple-choice' && response.label.includes('Choice')) ||
+                   (f.type === 'khan-text-response' && response.label.includes('Text'));
+          });
           
           if (!field) {
             console.log(`⚠️ No matching Khan Academy field found for: ${response.label}`);
             continue;
           }
           
-          console.log(`✏️ Filling Khan Academy field: ${field.label} with value: ${response.value}`);
+          console.log(`✏️ Filling Khan Academy ${field.type}: ${field.label} with value: ${response.value}`);
           await fillKhanAcademyField(field, response.value);
           
-          // Khan Academy needs time to process answers
-          await new Promise(resolve => setTimeout(resolve, 500));
+          // Khan Academy Perseus widgets need time to process
+          await new Promise(resolve => setTimeout(resolve, 700));
         } catch (error) {
           console.error(`❌ Error filling Khan Academy field ${response.label}:`, error);
         }
@@ -1905,88 +2149,137 @@ Example: [{"label": "Name", "value": "Alex Johnson"}, {"label": "Email", "value"
       case 'khan-multiple-choice':
         // Find the correct radio button based on the AI response
         const radioElements = field.radioElements;
+        const labelElements = field.labelElements || [];
         const valueStr = String(value).toLowerCase().trim();
         
-        console.log(`🔘 Looking for option: "${value}" among ${field.options.length} choices`);
+        console.log(`🔘 Khan Academy Multiple Choice: Looking for "${value}" among ${field.options.length} choices`);
         console.log('Available options:', field.options);
         
         let matched = false;
         for (let i = 0; i < field.options.length; i++) {
           const optionText = field.options[i].toLowerCase().trim();
           
-          // Check if the AI response matches this option
-          if (optionText.includes(valueStr) || 
-              valueStr.includes(optionText) ||
-              optionText === valueStr ||
-              // Check for letter answers (A, B, C, D)
-              (valueStr.length === 1 && optionText.startsWith(valueStr + ')')) ||
-              // Check for numeric answers
-              (optionText.includes(value) && !isNaN(value))) {
-            
-            console.log(`✅ Found matching option: "${field.options[i]}"`);
+          // More flexible matching for AI responses
+          const isMatch = 
+            // Exact match
+            optionText === valueStr ||
+            // Contains match (both ways)
+            optionText.includes(valueStr) || 
+            valueStr.includes(optionText) ||
+            // Letter answers (A, B, C, D) with various formats
+            (valueStr.length === 1 && optionText.match(new RegExp(`^${valueStr}[)\\.]\\s*`, 'i'))) ||
+            (valueStr.match(/^[a-d]$/i) && optionText.startsWith(valueStr)) ||
+            // Number at start of option
+            (optionText.match(/^\d+/) && optionText.startsWith(value)) ||
+            // Flexible numeric matching
+            (!isNaN(value) && optionText.includes(value.toString()));
+          
+          if (isMatch) {
+            console.log(`✅ Found matching option: "${field.options[i]}" at index ${i}`);
             const radio = radioElements[i];
+            const label = labelElements[i];
             
-            // Ensure radio button is visible and clickable
             if (!radio || radio.disabled) {
               console.log('⚠️ Radio button is disabled or not found');
               continue;
             }
             
-            // Multiple approaches to select the radio button
+            // Khan Academy uses React + Perseus, needs special handling
             
-            // 1. Focus and click the radio input
-            radio.focus();
-            await new Promise(resolve => setTimeout(resolve, 100));
-            
-            // 2. Set checked property directly
-            radio.checked = true;
-            
-            // 3. Click the radio button
-            radio.click();
-            
-            // 4. Dispatch multiple events for React
-            radio.dispatchEvent(new Event('click', { bubbles: true }));
-            radio.dispatchEvent(new Event('change', { bubbles: true }));
-            radio.dispatchEvent(new Event('input', { bubbles: true }));
-            
-            // 5. Click parent elements
-            const label = radio.closest('label');
-            if (label) {
-              await new Promise(resolve => setTimeout(resolve, 100));
+            // 1. First try clicking the label if available (most reliable for Perseus)
+            if (label && label.offsetParent !== null) {
+              console.log('📍 Clicking Perseus label element');
+              label.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              await new Promise(resolve => setTimeout(resolve, 200));
+              
+              // Simulate natural click sequence
+              label.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+              await new Promise(resolve => setTimeout(resolve, 50));
+              
+              label.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+              await new Promise(resolve => setTimeout(resolve, 50));
+              
+              label.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+              label.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+              
+              // Also click the label natively
               label.click();
+              
+              await new Promise(resolve => setTimeout(resolve, 300));
             }
             
-            // 6. Click the entire option container
-            const optionContainer = radio.closest('.perseus-radio-option, .radio, [class*="choice"]');
-            if (optionContainer) {
+            // 2. Try Perseus widget container click
+            const perseusOption = radio.closest('.perseus-radio-option, .perseus-widget-radio-choice');
+            if (perseusOption && perseusOption.offsetParent !== null) {
+              console.log('📍 Clicking Perseus option container');
+              perseusOption.click();
+              await new Promise(resolve => setTimeout(resolve, 200));
+            }
+            
+            // 3. Direct radio manipulation with React event sequence
+            if (!radio.checked) {
+              console.log('📍 Direct radio button interaction');
+              
+              // Focus first
+              radio.focus();
               await new Promise(resolve => setTimeout(resolve, 100));
-              optionContainer.click();
+              
+              // Set checked programmatically
+              radio.checked = true;
+              
+              // Trigger React-compatible events
+              const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'checked').set;
+              nativeInputValueSetter.call(radio, true);
+              
+              // Fire events that React/Perseus listens to
+              const changeEvent = new Event('change', { bubbles: true, cancelable: true });
+              const clickEvent = new Event('click', { bubbles: true, cancelable: true });
+              const inputEvent = new Event('input', { bubbles: true, cancelable: true });
+              
+              radio.dispatchEvent(inputEvent);
+              radio.dispatchEvent(changeEvent);
+              radio.dispatchEvent(clickEvent);
+              
+              // Also try clicking the radio directly
+              radio.click();
             }
             
-            // Verify selection
-            await new Promise(resolve => setTimeout(resolve, 200));
+            // 4. Verify selection worked
+            await new Promise(resolve => setTimeout(resolve, 300));
+            
             if (radio.checked) {
-              console.log('✅ Radio button successfully selected');
+              console.log('✅ Radio button successfully selected (checked = true)');
+              matched = true;
+              break;
             } else {
-              console.log('⚠️ Radio button may not be selected, trying alternate method...');
-              // Try clicking the visible label text
-              const visibleOption = optionContainer || label || radio.parentElement;
-              if (visibleOption) {
-                visibleOption.dispatchEvent(new MouseEvent('click', {
-                  bubbles: true,
-                  cancelable: true,
-                  view: window
-                }));
+              console.log('⚠️ Radio not checked yet, trying parent element click');
+              
+              // Last resort - click various parent elements
+              const clickTargets = [
+                radio.parentElement,
+                radio.closest('div[class*="radio"]'),
+                radio.closest('[role="radio"]'),
+                radio.closest('.perseus-widget')
+              ].filter(el => el && el.offsetParent !== null);
+              
+              for (const target of clickTargets) {
+                target.click();
+                await new Promise(resolve => setTimeout(resolve, 200));
+                if (radio.checked) {
+                  console.log('✅ Radio selected via parent click');
+                  matched = true;
+                  break;
+                }
               }
             }
             
-            matched = true;
-            break;
+            if (matched) break;
           }
         }
         
         if (!matched) {
           console.log('❌ No matching option found for:', value);
+          console.log('Tried to match against:', field.options);
         }
         break;
         
