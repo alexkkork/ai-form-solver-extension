@@ -28,17 +28,33 @@ console.log('AI Form Solver: Loading extension...');
           const clone = res.clone();
           try {
             const json = await clone.json();
-            console.log('📦 API Response structure:', Object.keys(json));
+            console.log('📦 API Response:', json);
             
-            // Try different paths for the question data
+            // Try different paths for the question data - based on working userscript
             let question = null;
+            
+            // Main path used by working userscript
             if (json.data?.assessmentItem?.item?.itemData) {
-              const item = json.data.assessmentItem.item.itemData;
-              question = JSON.parse(item).question;
-            } else if (json.data?.itemData) {
-              question = JSON.parse(json.data.itemData).question;
+              try {
+                const itemData = JSON.parse(json.data.assessmentItem.item.itemData);
+                question = itemData.question;
+                console.log('✅ Found question via assessmentItem path');
+              } catch (e) {
+                console.log('Error parsing itemData:', e);
+              }
+            } 
+            // Alternative paths
+            else if (json.itemData) {
+              try {
+                const itemData = typeof json.itemData === 'string' ? JSON.parse(json.itemData) : json.itemData;
+                question = itemData.question;
+                console.log('✅ Found question via itemData path');
+              } catch (e) {
+                console.log('Error parsing itemData:', e);
+              }
             } else if (json.question) {
               question = json.question;
+              console.log('✅ Found question directly');
             }
             
             if (question) {
@@ -1255,12 +1271,10 @@ console.log('AI Form Solver: Loading extension...');
             console.log(`📈 Khan Academy problem #${khanProblemCount}`);
           }
           
-          // Validate Khan Academy answers (skip first problem as API might not be ready)
+          // Validate Khan Academy answers
           const hasValidKhanAnswers = isKhanAcademy() && 
                                       khanAnswers && 
-                                      khanAnswers.length > 0 &&
-                                      khanAnswers.length === fields.length && // Make sure we have answers for all fields
-                                      khanProblemCount > 1; // Skip first problem as suggested
+                                      khanAnswers.length > 0;
           
           if (hasValidKhanAnswers) {
             console.log('📚 Using extracted Khan Academy answers instead of AI');
@@ -1268,27 +1282,34 @@ console.log('AI Form Solver: Loading extension...');
             showNotification(`📚 Using Khan Academy answers...`, 'success');
             
             // Convert extracted answers to AI response format
-            aiResponse = khanAnswers.map(answer => {
-              // Find matching field for this answer
-              const matchingField = fields.find(f => {
-                if (answer.type === 'radio' && f.type === 'khan-multiple-choice') {
-                  return true; // Khan multiple choice questions usually have one radio widget
+            aiResponse = [];
+            
+            // For multiple choice questions, find the correct answer from API
+            fields.forEach(field => {
+              if (field.type === 'khan-multiple-choice') {
+                // Find the radio widget answer
+                const radioAnswer = khanAnswers.find(a => a.type === 'radio');
+                if (radioAnswer && radioAnswer.answer) {
+                  console.log(`📝 Mapping radio answer: ${radioAnswer.answer} to field: ${field.label}`);
+                  aiResponse.push({
+                    label: field.label,
+                    value: radioAnswer.answer
+                  });
                 }
-                if ((answer.type === 'numeric-input' || answer.type === 'input-number') && f.type === 'khan-math-input') {
-                  return true; // Math input fields
+              } else if (field.type === 'khan-math-input') {
+                // Find numeric input answer
+                const numericAnswer = khanAnswers.find(a => 
+                  a.type === 'numeric-input' || a.type === 'input-number'
+                );
+                if (numericAnswer && numericAnswer.answer) {
+                  console.log(`📝 Mapping numeric answer: ${numericAnswer.answer} to field: ${field.label}`);
+                  aiResponse.push({
+                    label: field.label,
+                    value: numericAnswer.answer
+                  });
                 }
-                return false;
-              });
-              
-              if (matchingField) {
-                console.log(`📝 Mapping answer: ${answer.answer} to field: ${matchingField.label}`);
-                return {
-                  label: matchingField.label,
-                  value: answer.answer
-                };
               }
-              return null;
-            }).filter(r => r !== null);
+            });
             
             console.log('🎯 Mapped Khan answers to fields:', aiResponse);
             
@@ -1301,12 +1322,10 @@ console.log('AI Form Solver: Loading extension...');
           } else {
             // Call Gemini AI for non-Khan Academy sites, when no answers extracted, or when answer count doesn't match
             if (isKhanAcademy()) {
-              if (khanProblemCount === 1) {
-                console.log('⚠️ First Khan Academy problem - using AI (API might not be ready)');
-              } else if (!khanAnswers || khanAnswers.length === 0) {
+              if (!khanAnswers || khanAnswers.length === 0) {
                 console.log('⚠️ No Khan Academy answers extracted yet, using AI');
               } else {
-                console.log(`⚠️ Khan Academy answer count mismatch: ${khanAnswers?.length || 0} answers for ${fields.length} fields, using AI`);
+                console.log(`⚠️ Khan Academy answer validation failed, using AI`);
               }
             }
             showNotification(`🧠 AI analyzing page ${pageCount}...`, 'info');
