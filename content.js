@@ -1290,37 +1290,45 @@ console.log('AI Form Solver: Loading extension...');
             console.log('🔍 All extracted Khan answers:', khanAnswers);
             console.log('🔍 Fields to fill:', fields.map(f => ({ type: f.type, label: f.label })));
             
-            // For multiple choice questions, find the correct answer from API
-            fields.forEach(field => {
+            // Get all numeric answers (for problems with multiple math inputs)
+            const numericAnswers = khanAnswers.filter(a => 
+              a.type === 'numeric-input' || a.type === 'input-number'
+            );
+            let numericAnswerIndex = 0;
+            
+            // Get all radio answers (for problems with multiple choice)
+            const radioAnswers = khanAnswers.filter(a => a.type === 'radio');
+            let radioAnswerIndex = 0;
+            
+            // Map answers to fields in order
+            fields.forEach((field, fieldIndex) => {
               if (field.type === 'khan-multiple-choice') {
-                // Find the radio widget answer
-                const radioAnswer = khanAnswers.find(a => a.type === 'radio');
-                if (radioAnswer && radioAnswer.answer) {
-                  console.log(`📝 Mapping radio answer to field: ${field.label}`);
+                // Use next available radio answer
+                if (radioAnswerIndex < radioAnswers.length) {
+                  const radioAnswer = radioAnswers[radioAnswerIndex];
+                  console.log(`📝 Mapping radio answer #${radioAnswerIndex + 1} to field: ${field.label}`);
                   console.log(`📌 Answer value:`, radioAnswer.answer);
-                  console.log(`📌 Answer type:`, typeof radioAnswer.answer);
                   console.log(`📌 Available options:`, field.options);
                   aiResponse.push({
                     label: field.label,
                     value: radioAnswer.answer
                   });
+                  radioAnswerIndex++;
                 }
               } else if (field.type === 'khan-math-input') {
-                // Find numeric input answer
-                const numericAnswer = khanAnswers.find(a => 
-                  a.type === 'numeric-input' || a.type === 'input-number'
-                );
-                if (numericAnswer && numericAnswer.answer) {
-                  console.log(`📝 Mapping numeric answer to field: ${field.label}`);
+                // Use next available numeric answer
+                if (numericAnswerIndex < numericAnswers.length) {
+                  const numericAnswer = numericAnswers[numericAnswerIndex];
+                  console.log(`📝 Mapping numeric answer #${numericAnswerIndex + 1} to field #${fieldIndex + 1}: ${field.label}`);
                   console.log(`📌 Answer value:`, numericAnswer.answer);
                   console.log(`📌 Answer type:`, typeof numericAnswer.answer);
-                  console.log(`📌 Raw answer object:`, numericAnswer);
                   aiResponse.push({
                     label: field.label,
                     value: numericAnswer.answer
                   });
+                  numericAnswerIndex++;
                 } else {
-                  console.log(`⚠️ No numeric answer found for math input field: ${field.label}`);
+                  console.log(`⚠️ No more numeric answers available for field #${fieldIndex + 1}: ${field.label}`);
                 }
               }
             });
