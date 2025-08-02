@@ -1710,6 +1710,8 @@ CRITICAL: For Khan Academy math problems, follow these steps EXACTLY:
    - Fractions, decimals, percentages
    - Word problems
    - Algebra equations
+   - Card arrangement (e.g., "Arrange the cards below to show...")
+   - Scientific notation problems
 
 2. CONVERSION RULES:
    - Whole numbers: 5 = 5/1
@@ -1748,10 +1750,30 @@ WORD PROBLEM SOLVING:
 - Solve step by step
 - Check if answer makes sense
 
+SCIENTIFIC NOTATION & POWERS OF 10:
+- 10¹ = 10
+- 10² = 100
+- 10³ = 1000
+- 10⁻¹ = 0.1
+- 10⁻² = 0.01
+- When multiplying by 10ⁿ, move decimal point n places to the right
+- When multiplying by 10⁻ⁿ, move decimal point n places to the left
+- Examples:
+  - 59.303 × 10² = 59.303 × 100 = 5930.3
+  - 45.6 × 10³ = 45.6 × 1000 = 45600
+  - 123.4 × 10⁻² = 123.4 × 0.01 = 1.234
+
+CARD ARRANGEMENT PROBLEMS:
+- If asked to "arrange cards to show the solution", calculate the answer first
+- Then provide the digits in the correct order
+- Example: "Arrange cards to show 59.303 × 10²" → Calculate: 5930.3 → Answer: "5 9 3 0 . 3"
+- Example: "Arrange cards to show 4.56 × 10³" → Calculate: 4560 → Answer: "4 5 6 0"
+
 COMMON MISTAKES TO AVOID:
 - DO NOT give 21/28 when answer should be 21/4 (always simplify)
 - DO NOT give 5/3 when answer should be 3/2 (check your multiplication)
 - DO NOT mix up numerator and denominator when inverting for division
+- DO NOT misplace decimal points in scientific notation (59.303 × 10² = 5930.3, NOT 309.53)
 
 RESPONSE FORMAT:
 Return ONLY a valid JSON array. Each object must have:
