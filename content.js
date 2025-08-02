@@ -1971,12 +1971,21 @@ SCIENTIFIC NOTATION & POWERS OF 10:
   - 45.6 × 10³ = 45.6 × 1000 = 45600
   - 123.4 × 10⁻² = 123.4 × 0.01 = 1.234
 
-VOLUME CALCULATION PROBLEMS:
-- Count ALL visible unit cubes from both views
-- Front view shows some cubes, back view may show additional hidden cubes
-- Add cubes from all layers: front layer + middle layers + back layer
-- Example: If front shows 4 cubes and back shows 2 more hidden cubes → Total = 6
-- For complex shapes, count layer by layer systematically
+VOLUME CALCULATION PROBLEMS (3D CUBE COUNTING):
+- CRITICAL: Count each horizontal layer separately from bottom to top
+- Look at BOTH front and back views to understand the full 3D structure
+- Layer-by-layer method:
+  1. Bottom layer: Count all cubes in the lowest horizontal slice
+  2. Middle layers: Count cubes in each horizontal slice above
+  3. Top layer: Count cubes in the highest horizontal slice
+  4. Add all layers together for total volume
+- Example with colored layers:
+  - Red layer (bottom): If 3×3 grid = 9 cubes
+  - Blue layer (middle): If 2×2 grid = 4 cubes  
+  - Green layer (top): If 2×1 grid = 2 cubes
+  - Total: 9 + 4 + 2 = 15 cubes
+- IMPORTANT: Each cube in the figure represents ONE unit cube
+- The back view helps confirm the depth and hidden cubes
 
 KHAN ACADEMY INTERACTIVE WIDGET TYPES:
 
@@ -2023,6 +2032,8 @@ COMMON MISTAKES TO AVOID:
 - DO NOT subtract fractions without converting to common denominator first
 - When asked for "expression to find difference", give the subtraction expression, not the answer
 - CRITICAL: 1/4 = 3/12, NOT 1/12. Always convert fractions correctly!
+- DO NOT undercount cubes in 3D shapes - count EVERY layer systematically
+- For volume problems: Count width × depth × height for EACH layer, then add all layers
 
 RESPONSE FORMAT:
 Return ONLY a valid JSON array. Each object must have:
