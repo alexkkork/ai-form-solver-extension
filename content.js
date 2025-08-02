@@ -2819,7 +2819,7 @@ Example: [{"label": "Name", "value": "Alex Johnson"}, {"label": "Email", "value"
             userInstruction = `Interactive widget: ${value}`;
         }
         
-        showNotification(userInstruction, 'info', 10000); // Show for 10 seconds
+        showNotification(userInstruction, 'info', 'persistent'); // Show until user completes
         
         // Mark this widget as needing manual completion
         field.element.setAttribute('data-ai-interactive-pending', 'true');
@@ -2827,6 +2827,29 @@ Example: [{"label": "Name", "value": "Alex Johnson"}, {"label": "Email", "value"
         
         // After showing instructions, wait for user to complete the interactive task
         console.log('⏳ Waiting for user to complete interactive widget...');
+        
+        // Watch for "Done" or "Check" button clicks
+        const watchForCompletion = setInterval(() => {
+          // Find done/check buttons
+          const buttons = Array.from(document.querySelectorAll('button'));
+          const doneButton = buttons.find(btn => 
+            btn.getAttribute('data-test-id') === 'perseus-done-button' ||
+            btn.textContent?.toLowerCase().includes('done') ||
+            btn.textContent?.toLowerCase().includes('check')
+          );
+          
+          if (doneButton && !doneButton.disabled) {
+            // Add click listener to remove notification when done is clicked
+            doneButton.addEventListener('click', () => {
+              removeInteractiveNotification();
+              clearInterval(watchForCompletion);
+              console.log('✅ Interactive widget completed by user');
+            }, { once: true });
+          }
+        }, 500);
+        
+        // Stop watching after 60 seconds to prevent memory leak
+        setTimeout(() => clearInterval(watchForCompletion), 60000);
         break;
     }
     
@@ -3172,18 +3195,63 @@ Example: [{"label": "Name", "value": "Alex Johnson"}, {"label": "Email", "value"
   }
   
   // NOTIFICATIONS
-  function showNotification(message, type = 'info') {
+  let activeInteractiveNotification = null;
+  
+  function showNotification(message, type = 'info', duration = 3000) {
     const notification = document.createElement('div');
     notification.className = 'ai-form-notification';
     notification.textContent = message;
     notification.dataset.type = type;
     
+    // Make it more prominent for interactive widgets
+    if (duration === 'persistent') {
+      notification.style.cssText = `
+        position: fixed !important;
+        top: 20px !important;
+        right: 20px !important;
+        z-index: 2147483647 !important;
+        background: rgba(59, 130, 246, 0.95) !important;
+        color: white !important;
+        padding: 16px 24px !important;
+        border-radius: 12px !important;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+        font-size: 14px !important;
+        font-weight: 500 !important;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2) !important;
+        backdrop-filter: blur(10px) !important;
+        max-width: 400px !important;
+        white-space: pre-line !important;
+        animation: slideIn 0.3s ease-out !important;
+      `;
+      
+      // Store reference to remove later
+      if (activeInteractiveNotification) {
+        activeInteractiveNotification.remove();
+      }
+      activeInteractiveNotification = notification;
+    }
+    
     document.body.appendChild(notification);
     
-    setTimeout(() => {
-      notification.style.opacity = '0';
-      setTimeout(() => notification.remove(), 300);
-    }, 3000);
+    // Only auto-remove if not persistent
+    if (duration !== 'persistent') {
+      setTimeout(() => {
+        notification.style.opacity = '0';
+        setTimeout(() => notification.remove(), 300);
+      }, duration);
+    }
+  }
+  
+  function removeInteractiveNotification() {
+    if (activeInteractiveNotification) {
+      activeInteractiveNotification.style.opacity = '0';
+      setTimeout(() => {
+        if (activeInteractiveNotification) {
+          activeInteractiveNotification.remove();
+          activeInteractiveNotification = null;
+        }
+      }, 300);
+    }
   }
   
   console.log('✅ AI Form Solver loaded successfully!');
