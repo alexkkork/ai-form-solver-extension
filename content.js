@@ -44,6 +44,16 @@ console.log('AI Form Solver: Loading extension...');
             if (question) {
               khanAnswers = extractKhanAnswers(question);
               console.log('📚 Extracted Khan Academy answers:', khanAnswers);
+              
+              // Log the raw widget data for debugging
+              if (question.widgets) {
+                Object.entries(question.widgets).forEach(([widgetName, widget]) => {
+                  console.log(`📊 Widget ${widgetName}:`, {
+                    type: widgetName.split(" ")[0],
+                    options: widget.options
+                  });
+                });
+              }
             } else {
               console.log('❓ No question data found in response');
             }
@@ -84,9 +94,11 @@ console.log('AI Form Solver: Loading extension...');
         case "radio":
           // Multiple choice - get the full content including math expressions
           if (widget.options?.choices) {
+            console.log(`🔍 Radio widget choices:`, widget.options.choices);
             const correctChoices = widget.options.choices
               .filter(c => c.correct)
               .map(c => c.content);
+            console.log(`✓ Correct choices found:`, correctChoices);
             if (correctChoices.length > 0) {
               answer = correctChoices;
             }
@@ -2792,6 +2804,13 @@ Example: [{"label": "Name", "value": "Alex Johnson"}, {"label": "Email", "value"
         
         console.log(`🔘 Khan Academy Multiple Choice: Looking for "${value}" among ${field.options.length} choices`);
         console.log('Available options:', field.options);
+        console.log('🎯 Raw value from API:', value);
+        console.log('🎯 Value type:', typeof value);
+        console.log('🎯 Is array?', Array.isArray(value));
+        
+        // If value is an array (from API extraction), use the first element
+        const actualValue = Array.isArray(value) ? value[0] : value;
+        console.log('🎯 Actual value to match:', actualValue);
         
         let matched = false;
         for (let i = 0; i < field.options.length; i++) {
@@ -2808,7 +2827,7 @@ Example: [{"label": "Name", "value": "Alex Johnson"}, {"label": "Email", "value"
               .toLowerCase();
           };
           
-          const normalizedValue = normalizeExpression(valueStr);
+          const normalizedValue = normalizeExpression(String(actualValue));
           const normalizedOption = normalizeExpression(optionText);
           
           // More flexible matching for AI responses
@@ -2816,16 +2835,16 @@ Example: [{"label": "Name", "value": "Alex Johnson"}, {"label": "Email", "value"
             // Exact match after normalization
             normalizedOption === normalizedValue ||
             // Original exact match
-            optionText === valueStr ||
+            optionText === String(actualValue) ||
             // Contains match (for partial expressions)
             normalizedOption.includes(normalizedValue) || 
             normalizedValue.includes(normalizedOption) ||
             // Letter answers (A, B, C, D) with various formats
-            (valueStr.length === 1 && optionText.match(new RegExp(`^${valueStr}[)\\.]\\s*`, 'i'))) ||
+            (String(actualValue).length === 1 && optionText.match(new RegExp(`^${actualValue}[)\\.]\\s*`, 'i'))) ||
             // For choice labels like "(Choice A)", "(Choice B)", etc.
-            (valueStr.includes('Choice') && optionText.includes(valueStr)) ||
+            (String(actualValue).includes('Choice') && optionText.includes(String(actualValue))) ||
             // Math expression matching - handle different formatting
-            (valueStr.includes('*') || valueStr.includes('/') || valueStr.includes('+') || valueStr.includes('-')) &&
+            (String(actualValue).includes('*') || String(actualValue).includes('/') || String(actualValue).includes('+') || String(actualValue).includes('-')) &&
             normalizedOption.replace(/[^0-9+\-*/]/g, '') === normalizedValue.replace(/[^0-9+\-*/]/g, '');
           
           if (isMatch) {
