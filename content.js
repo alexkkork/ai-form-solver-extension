@@ -12,6 +12,96 @@ console.log('AI Form Solver: Loading extension...');
   }
   window.AI_FORM_SOLVER_LOADED = true;
   
+  // Khan Academy answer extraction
+  let khanAnswers = null;
+  
+  if (window.location.hostname.includes('khanacademy.org')) {
+    console.log('🎓 Khan Academy detected - intercepting API for answer extraction');
+    
+    const originalFetch = window.fetch;
+    window.fetch = function() {
+      return originalFetch.apply(this, arguments).then(async (res) => {
+        if (res.url.includes("/getAssessmentItem")) {
+          const clone = res.clone();
+          try {
+            const json = await clone.json();
+            const item = json.data.assessmentItem.item.itemData;
+            const question = JSON.parse(item).question;
+            
+            if (question) {
+              khanAnswers = extractKhanAnswers(question);
+              console.log('📚 Extracted Khan Academy answers:', khanAnswers);
+            }
+          } catch (e) {
+            console.log('Error extracting Khan answers:', e);
+          }
+        }
+        return res;
+      });
+    };
+  }
+  
+  // Extract answers from Khan Academy API response
+  function extractKhanAnswers(question) {
+    const answers = [];
+    
+    Object.entries(question.widgets).forEach(([widgetName, widget]) => {
+      const widgetType = widgetName.split(" ")[0];
+      let answer = null;
+      
+      switch (widgetType) {
+        case "numeric-input":
+        case "input-number":
+          // Free response answers
+          if (widget.options?.answers) {
+            answer = widget.options.answers
+              .filter(a => a.status === "correct")
+              .map(a => a.value);
+          } else if (widget.options?.value !== undefined) {
+            answer = [widget.options.value];
+          }
+          break;
+          
+        case "radio":
+          // Multiple choice
+          if (widget.options?.choices) {
+            answer = widget.options.choices
+              .filter(c => c.correct)
+              .map(c => c.content.replace(/\$/g, ''));
+          }
+          break;
+          
+        case "expression":
+          // Expression answers
+          if (widget.options?.answerForms) {
+            answer = widget.options.answerForms
+              .filter(a => Object.values(a).includes("correct"))
+              .map(a => a.value);
+          }
+          break;
+          
+        case "dropdown":
+          // Dropdown answers
+          if (widget.options?.choices) {
+            answer = widget.options.choices
+              .filter(c => c.correct)
+              .map(c => c.content);
+          }
+          break;
+      }
+      
+      if (answer && answer.length > 0) {
+        answers.push({
+          widget: widgetName,
+          type: widgetType,
+          answer: answer.length === 1 ? answer[0] : answer
+        });
+      }
+    });
+    
+    return answers;
+  }
+  
   // State management
   let isLearningMode = false;
   let detectedFields = [];
@@ -1916,6 +2006,18 @@ This is a cube counting problem. The correct answer is likely between 10-20 cube
    - Green layer: Usually 2×1 or 1×2 = 2 cubes
 3. Common correct answers: 14, 15, or 16 cubes
 4. DO NOT answer with single digits like 1, 2, 3, 4, 5, 6 - these are too low!`;
+    }
+    
+    // If we have Khan Academy answers from API, include them
+    if (khanAnswers && khanAnswers.length > 0) {
+      promptText += `
+
+KHAN ACADEMY CORRECT ANSWERS DETECTED!
+The following are the correct answers extracted from Khan Academy:
+${JSON.stringify(khanAnswers, null, 2)}
+
+Match these answers to the appropriate fields based on the widget names and types.
+Use these exact answers for the corresponding fields.`;
     }
     
     promptText += `
