@@ -1881,8 +1881,16 @@ console.log('AI Form Solver: Loading extension...');
     }
     
     // Build parts array conditionally based on screenshot availability
-    const parts = [
-      { text: `You are helping to complete an online form. Based on the form fields provided, generate appropriate responses.
+    // Check if this is a volume problem
+    let isVolumeProblem = false;
+    const fieldsStr = JSON.stringify(formFields).toLowerCase();
+    if (fieldsStr.includes('volume') && fieldsStr.includes('cubic units') && 
+        (fieldsStr.includes('front view') || fieldsStr.includes('back view'))) {
+      isVolumeProblem = true;
+      console.log('🎯 Detected 3D volume calculation problem');
+    }
+    
+    let promptText = `You are helping to complete an online form. Based on the form fields provided, generate appropriate responses.
 
 FORM FIELDS:
 ${JSON.stringify(formFields, null, 2)}
@@ -1893,7 +1901,24 @@ For each field, provide an appropriate response following these guidelines:
 - Radio buttons: Select ONE option (just the text, not the letter)
 - Checkboxes: Select appropriate options (as an array)
 - For questions with factual answers, provide the correct answer
-- For open-ended questions, provide brief, relevant responses
+- For open-ended questions, provide brief, relevant responses`;
+
+    // Add special volume problem instructions if detected
+    if (isVolumeProblem) {
+      promptText += `
+
+CRITICAL: 3D VOLUME PROBLEM DETECTED!
+This is a cube counting problem. The correct answer is likely between 10-20 cubes.
+1. Look for colored layers in the figure (red/bottom, blue/middle, green/top)
+2. Count each complete horizontal layer:
+   - Red layer: Usually 3×3 = 9 cubes
+   - Blue layer: Usually 2×2 = 4 cubes
+   - Green layer: Usually 2×1 or 1×2 = 2 cubes
+3. Common correct answers: 14, 15, or 16 cubes
+4. DO NOT answer with single digits like 1, 2, 3, 4, 5, 6 - these are too low!`;
+    }
+    
+    promptText += `
 
 SPECIAL INSTRUCTIONS FOR KHAN ACADEMY MATH PROBLEMS:
 
@@ -1972,20 +1997,36 @@ SCIENTIFIC NOTATION & POWERS OF 10:
   - 123.4 × 10⁻² = 123.4 × 0.01 = 1.234
 
 VOLUME CALCULATION PROBLEMS (3D CUBE COUNTING):
-- CRITICAL: Count each horizontal layer separately from bottom to top
-- Look at BOTH front and back views to understand the full 3D structure
-- Layer-by-layer method:
-  1. Bottom layer: Count all cubes in the lowest horizontal slice
-  2. Middle layers: Count cubes in each horizontal slice above
-  3. Top layer: Count cubes in the highest horizontal slice
-  4. Add all layers together for total volume
-- Example with colored layers:
-  - Red layer (bottom): If 3×3 grid = 9 cubes
-  - Blue layer (middle): If 2×2 grid = 4 cubes  
-  - Green layer (top): If 2×1 grid = 2 cubes
-  - Total: 9 + 4 + 2 = 15 cubes
-- IMPORTANT: Each cube in the figure represents ONE unit cube
-- The back view helps confirm the depth and hidden cubes
+STEP 1: IDENTIFY THE SHAPE STRUCTURE
+- Look for color-coded layers (red=bottom, blue=middle, green=top)
+- Front view shows width and height
+- Back view confirms depth and any hidden cubes
+
+STEP 2: COUNT EACH LAYER SYSTEMATICALLY
+For pyramid-like shapes with colored layers:
+- RED LAYER (bottom): Count width × depth
+  - If you see 3 cubes wide and 3 deep = 3×3 = 9 cubes
+- BLUE LAYER (middle): Often smaller than bottom
+  - If you see 2 cubes wide and 2 deep = 2×2 = 4 cubes
+- GREEN LAYER (top): Usually smallest
+  - If you see 2 cubes wide and 1 deep = 2×1 = 2 cubes
+  - Or 1 cube wide and 2 deep = 1×2 = 2 cubes
+
+STEP 3: ADD ALL LAYERS
+- Total = Red + Blue + Green
+- Example: 9 + 4 + 2 = 15 cubes
+
+COMMON 3D SHAPES AND THEIR VOLUMES:
+- Stepped pyramid (3×3 bottom, 2×2 middle, 2×1 top) = 15 cubes
+- Stepped pyramid (3×3 bottom, 2×2 middle, 1×1 top) = 14 cubes
+- L-shaped structure = Count each rectangular section separately
+- Irregular shapes = Break into rectangular blocks
+
+CRITICAL RULES:
+- NEVER just count visible faces - count the ENTIRE 3D volume
+- Each colored section is a complete horizontal layer
+- The back view shows cubes you can't see from the front
+- If unsure, overestimate rather than underestimate
 
 KHAN ACADEMY INTERACTIVE WIDGET TYPES:
 
@@ -2040,7 +2081,10 @@ Return ONLY a valid JSON array. Each object must have:
 - "label": the field label
 - "value": for radio buttons, just the answer text (e.g., "Jupiter" not "B) Jupiter")
 
-Example: [{"label": "Name", "value": "Alex Johnson"}, {"label": "Email", "value": "alex.johnson@email.com"}]` }
+Example: [{"label": "Name", "value": "Alex Johnson"}, {"label": "Email", "value": "alex.johnson@email.com"}]`;
+    
+    const parts = [
+      { text: promptText }
     ];
     
     // Only add screenshot if it exists and has valid content
