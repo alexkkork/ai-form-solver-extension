@@ -1695,16 +1695,25 @@ For each field, provide an appropriate response following these guidelines:
 
 SPECIAL INSTRUCTIONS FOR MATH PROBLEMS:
 - If a field contains a math problem (like "3 3/4 ÷ 5/7" or "Divide. Write the quotient in lowest terms"):
-  1. Solve the problem step by step
-  2. For division of fractions: a/b ÷ c/d = a/b × d/c
-  3. Always simplify to lowest terms
-  4. For Khan Academy: provide answer as improper fraction (e.g., "21/4") or mixed number (e.g., "5 1/4")
-  5. Do NOT include spaces in fractions for input fields (use "21/4" not "21 / 4")
   
-Example math solutions:
-- 3 3/4 ÷ 5/7 = 15/4 ÷ 5/7 = 15/4 × 7/5 = 105/20 = 21/4 (or 5 1/4 as mixed)
+  STEP-BY-STEP PROCESS:
+  1. Convert ALL numbers to fractions first:
+     - Whole numbers: 5 = 5/1
+     - Mixed numbers: 3 1/3 = (3×3+1)/3 = 10/3
+  2. For division: a/b ÷ c/d = a/b × d/c (flip and multiply)
+  3. Multiply: (a×d)/(b×c)
+  4. Simplify by finding GCD and dividing both numerator and denominator
+  5. For Khan Academy: use improper fraction format without spaces (e.g., "3/2" not "3 / 2")
+  
+CRITICAL: When you see "5 ÷ 3 1/3", this means:
+- Convert: 5 = 5/1 and 3 1/3 = 10/3
+- Calculate: 5/1 ÷ 10/3 = 5/1 × 3/10 = 15/10 = 3/2
+
+More examples:
+- 3 3/4 ÷ 5/7 = 15/4 ÷ 5/7 = 15/4 × 7/5 = 105/20 = 21/4
+- 5 ÷ 3 1/3 = 5/1 ÷ 10/3 = 5/1 × 3/10 = 15/10 = 3/2
 - 2/3 × 3/4 = 6/12 = 1/2
-- 5 1/2 + 2 1/3 = 11/2 + 7/3 = 33/6 + 14/6 = 47/6 (or 7 5/6 as mixed)
+- 7 ÷ 2 1/2 = 7/1 ÷ 5/2 = 7/1 × 2/5 = 14/5
 
 RESPONSE FORMAT:
 Return ONLY a valid JSON array. Each object must have:
