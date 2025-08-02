@@ -55,11 +55,13 @@ console.log('AI Form Solver: Loading extension...');
     };
   }
   
-  // Extract answers from Khan Academy API response
+  // Extract answers from Khan Academy API response (using working logic from userscript)
   function extractKhanAnswers(question) {
     const answers = [];
     
-    Object.entries(question.widgets).forEach(([widgetName, widget]) => {
+    // Process each widget
+    Object.keys(question.widgets).forEach(widgetName => {
+      const widget = question.widgets[widgetName];
       const widgetType = widgetName.split(" ")[0];
       let answer = null;
       
@@ -71,17 +73,22 @@ console.log('AI Form Solver: Loading extension...');
             answer = widget.options.answers
               .filter(a => a.status === "correct")
               .map(a => a.value);
+          } else if (widget.options?.inexact === false) {
+            answer = [widget.options.value];
           } else if (widget.options?.value !== undefined) {
             answer = [widget.options.value];
           }
           break;
           
         case "radio":
-          // Multiple choice
+          // Multiple choice - get the full content including math expressions
           if (widget.options?.choices) {
-            answer = widget.options.choices
+            const correctChoices = widget.options.choices
               .filter(c => c.correct)
-              .map(c => c.content.replace(/\$/g, ''));
+              .map(c => c.content);
+            if (correctChoices.length > 0) {
+              answer = correctChoices;
+            }
           }
           break;
           
@@ -105,11 +112,22 @@ console.log('AI Form Solver: Loading extension...');
       }
       
       if (answer && answer.length > 0) {
+        // Clean up the answer text
+        const cleanedAnswer = answer.map(a => {
+          if (typeof a === 'string') {
+            // Remove dollar signs but keep the math expressions intact
+            return a.replace(/\$/g, '');
+          }
+          return a;
+        });
+        
         answers.push({
           widget: widgetName,
           type: widgetType,
-          answer: answer.length === 1 ? answer[0] : answer
+          answer: cleanedAnswer.length === 1 ? cleanedAnswer[0] : cleanedAnswer
         });
+        
+        console.log(`✅ Found answer for ${widgetType} widget:`, cleanedAnswer);
       }
     });
     
@@ -1221,9 +1239,41 @@ console.log('AI Form Solver: Loading extension...');
             name: f.name || ''
           }));
           
-          // Call Gemini AI
-          showNotification(`🧠 AI analyzing page ${pageCount}...`, 'info');
-          const aiResponse = await callGemini(formDescription, screenshot, apiKey);
+          // Check if we have Khan Academy answers extracted from API
+          let aiResponse;
+          if (isKhanAcademy() && khanAnswers && khanAnswers.length > 0) {
+            console.log('📚 Using extracted Khan Academy answers instead of AI');
+            showNotification(`📚 Using Khan Academy answers...`, 'success');
+            
+            // Convert extracted answers to AI response format
+            aiResponse = khanAnswers.map(answer => {
+              // Find matching field for this answer
+              const matchingField = fields.find(f => {
+                if (answer.type === 'radio' && f.type === 'khan-multiple-choice') {
+                  return true; // Khan multiple choice questions usually have one radio widget
+                }
+                if ((answer.type === 'numeric-input' || answer.type === 'input-number') && f.type === 'khan-math-input') {
+                  return true; // Math input fields
+                }
+                return false;
+              });
+              
+              if (matchingField) {
+                console.log(`📝 Mapping answer: ${answer.answer} to field: ${matchingField.label}`);
+                return {
+                  label: matchingField.label,
+                  value: answer.answer
+                };
+              }
+              return null;
+            }).filter(r => r !== null);
+            
+            console.log('🎯 Mapped Khan answers to fields:', aiResponse);
+          } else {
+            // Call Gemini AI for non-Khan Academy sites or when no answers extracted
+            showNotification(`🧠 AI analyzing page ${pageCount}...`, 'info');
+            aiResponse = await callGemini(formDescription, screenshot, apiKey);
+          }
           
           // Fill form with visual feedback
           showNotification(`✏️ Filling fields on page ${pageCount}...`, 'info');
@@ -2706,29 +2756,45 @@ Example: [{"label": "Name", "value": "Alex Johnson"}, {"label": "Email", "value"
         // Find the correct radio button based on the AI response
         const radioElements = field.radioElements;
         const labelElements = field.labelElements || [];
-        const valueStr = String(value).toLowerCase().trim();
+        const valueStr = String(value);
         
         console.log(`🔘 Khan Academy Multiple Choice: Looking for "${value}" among ${field.options.length} choices`);
         console.log('Available options:', field.options);
         
         let matched = false;
         for (let i = 0; i < field.options.length; i++) {
-          const optionText = field.options[i].toLowerCase().trim();
+          const optionText = field.options[i];
+          
+          // For Khan Academy API extracted answers, do exact content matching
+          // Remove LaTeX delimiters and normalize math expressions
+          const normalizeExpression = (expr) => {
+            return expr
+              .replace(/\$/g, '') // Remove LaTeX delimiters
+              .replace(/\\[a-zA-Z]+/g, '') // Remove LaTeX commands
+              .replace(/[{}]/g, '') // Remove braces
+              .replace(/\s+/g, '') // Remove all spaces
+              .toLowerCase();
+          };
+          
+          const normalizedValue = normalizeExpression(valueStr);
+          const normalizedOption = normalizeExpression(optionText);
           
           // More flexible matching for AI responses
           const isMatch = 
-            // Exact match
+            // Exact match after normalization
+            normalizedOption === normalizedValue ||
+            // Original exact match
             optionText === valueStr ||
-            // Contains match (both ways)
-            optionText.includes(valueStr) || 
-            valueStr.includes(optionText) ||
+            // Contains match (for partial expressions)
+            normalizedOption.includes(normalizedValue) || 
+            normalizedValue.includes(normalizedOption) ||
             // Letter answers (A, B, C, D) with various formats
             (valueStr.length === 1 && optionText.match(new RegExp(`^${valueStr}[)\\.]\\s*`, 'i'))) ||
-            (valueStr.match(/^[a-d]$/i) && optionText.startsWith(valueStr)) ||
-            // Number at start of option
-            (optionText.match(/^\d+/) && optionText.startsWith(value)) ||
-            // Flexible numeric matching
-            (!isNaN(value) && optionText.includes(value.toString()));
+            // For choice labels like "(Choice A)", "(Choice B)", etc.
+            (valueStr.includes('Choice') && optionText.includes(valueStr)) ||
+            // Math expression matching - handle different formatting
+            (valueStr.includes('*') || valueStr.includes('/') || valueStr.includes('+') || valueStr.includes('-')) &&
+            normalizedOption.replace(/[^0-9+\-*/]/g, '') === normalizedValue.replace(/[^0-9+\-*/]/g, '');
           
           if (isMatch) {
             console.log(`✅ Found matching option: "${field.options[i]}" at index ${i}`);
