@@ -21,16 +21,30 @@ console.log('AI Form Solver: Loading extension...');
     const originalFetch = window.fetch;
     window.fetch = function() {
       return originalFetch.apply(this, arguments).then(async (res) => {
-        if (res.url.includes("/getAssessmentItem")) {
+        console.log('📡 Fetch intercepted:', res.url);
+        if (res.url.includes("/getAssessmentItem") || res.url.includes("/graphql") || res.url.includes("/api")) {
+          console.log('🎯 Khan Academy API call detected:', res.url);
           const clone = res.clone();
           try {
             const json = await clone.json();
-            const item = json.data.assessmentItem.item.itemData;
-            const question = JSON.parse(item).question;
+            console.log('📦 API Response structure:', Object.keys(json));
+            
+            // Try different paths for the question data
+            let question = null;
+            if (json.data?.assessmentItem?.item?.itemData) {
+              const item = json.data.assessmentItem.item.itemData;
+              question = JSON.parse(item).question;
+            } else if (json.data?.itemData) {
+              question = JSON.parse(json.data.itemData).question;
+            } else if (json.question) {
+              question = json.question;
+            }
             
             if (question) {
               khanAnswers = extractKhanAnswers(question);
               console.log('📚 Extracted Khan Academy answers:', khanAnswers);
+            } else {
+              console.log('❓ No question data found in response');
             }
           } catch (e) {
             console.log('Error extracting Khan answers:', e);
@@ -2073,6 +2087,17 @@ WORD PROBLEM SOLVING:
 - Set up the equation
 - Solve step by step
 - Check if answer makes sense
+
+PLACE VALUE QUESTIONS:
+CRITICAL: When asked "What value does the [digit] represent in the number [X]?"
+- The answer is JUST THE DIGIT'S VALUE in its position
+- DO NOT multiply by the place value
+- Examples:
+  - "What value does the 2 represent in 52.3?" → Answer: 2 (NOT 20)
+  - "What value does the 5 represent in 52.3?" → Answer: 50 (5 in tens place)
+  - "What value does the 3 represent in 52.3?" → Answer: 0.3 (3 in tenths place)
+  - "What value does the 7 represent in 0.7?" → Answer: 0.7 (7 in tenths place)
+- Place values: hundreds(100), tens(10), ones(1), tenths(0.1), hundredths(0.01)
 
 FRACTION COMPARISON & SUBTRACTION PROBLEMS:
 - When comparing two fractions, find which is larger
