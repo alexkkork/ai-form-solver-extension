@@ -12,8 +12,9 @@ console.log('AI Form Solver: Loading extension...');
   }
   window.AI_FORM_SOLVER_LOADED = true;
   
-  // Khan Academy answer extraction
+  // Khan Academy answer extraction and problem counter
   let khanAnswers = null;
+  let khanProblemCount = 0;
   
   if (window.location.hostname.includes('khanacademy.org')) {
     console.log('🎓 Khan Academy detected - intercepting API for answer extraction');
@@ -1241,8 +1242,23 @@ console.log('AI Form Solver: Loading extension...');
           
           // Check if we have Khan Academy answers extracted from API
           let aiResponse;
-          if (isKhanAcademy() && khanAnswers && khanAnswers.length > 0) {
+          
+          // Track Khan Academy problems
+          if (isKhanAcademy()) {
+            khanProblemCount++;
+            console.log(`📈 Khan Academy problem #${khanProblemCount}`);
+          }
+          
+          // Validate Khan Academy answers (skip first problem as API might not be ready)
+          const hasValidKhanAnswers = isKhanAcademy() && 
+                                      khanAnswers && 
+                                      khanAnswers.length > 0 &&
+                                      khanAnswers.length === fields.length && // Make sure we have answers for all fields
+                                      khanProblemCount > 1; // Skip first problem as suggested
+          
+          if (hasValidKhanAnswers) {
             console.log('📚 Using extracted Khan Academy answers instead of AI');
+            console.log(`📊 Extracted ${khanAnswers.length} answers for ${fields.length} fields`);
             showNotification(`📚 Using Khan Academy answers...`, 'success');
             
             // Convert extracted answers to AI response format
@@ -1269,8 +1285,24 @@ console.log('AI Form Solver: Loading extension...');
             }).filter(r => r !== null);
             
             console.log('🎯 Mapped Khan answers to fields:', aiResponse);
+            
+            // If we couldn't map all answers, fall back to AI
+            if (aiResponse.length < fields.length) {
+              console.log(`⚠️ Could only map ${aiResponse.length} of ${fields.length} fields, falling back to AI`);
+              showNotification(`🧠 AI analyzing page ${pageCount}...`, 'info');
+              aiResponse = await callGemini(formDescription, screenshot, apiKey);
+            }
           } else {
-            // Call Gemini AI for non-Khan Academy sites or when no answers extracted
+            // Call Gemini AI for non-Khan Academy sites, when no answers extracted, or when answer count doesn't match
+            if (isKhanAcademy()) {
+              if (khanProblemCount === 1) {
+                console.log('⚠️ First Khan Academy problem - using AI (API might not be ready)');
+              } else if (!khanAnswers || khanAnswers.length === 0) {
+                console.log('⚠️ No Khan Academy answers extracted yet, using AI');
+              } else {
+                console.log(`⚠️ Khan Academy answer count mismatch: ${khanAnswers?.length || 0} answers for ${fields.length} fields, using AI`);
+              }
+            }
             showNotification(`🧠 AI analyzing page ${pageCount}...`, 'info');
             aiResponse = await callGemini(formDescription, screenshot, apiKey);
           }
