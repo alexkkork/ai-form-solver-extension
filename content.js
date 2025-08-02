@@ -16,22 +16,129 @@ console.log('AI Form Solver: Loading extension...');
   let khanAnswers = null;
   let khanProblemCount = 0;
   
+  // Inject API interception script for Khan Academy to run in page context
   if (window.location.hostname.includes('khanacademy.org')) {
-    console.log('🎓 Khan Academy detected - intercepting API for answer extraction');
+    console.log('🎓 Khan Academy detected - injecting API interceptor');
     
-    // Intercept fetch requests
+    // Create and inject a script to run in the page context
+    const script = document.createElement('script');
+    script.textContent = `
+      (function() {
+        console.log('🚀 Khan Academy API interceptor injected');
+        
+        // Store original fetch
+        const originalFetch = window.fetch;
+        
+        // Override fetch
+        window.fetch = function(...args) {
+          const [url] = args;
+          const urlStr = typeof url === 'string' ? url : url.toString();
+          
+          return originalFetch.apply(this, args).then(async (res) => {
+            if (urlStr.includes('getAssessmentItem') || 
+                urlStr.includes('graphql') || 
+                urlStr.includes('_render')) {
+              console.log('🎯 Khan API call detected:', urlStr);
+              
+              const clone = res.clone();
+              try {
+                const json = await clone.json();
+                
+                // Send the data to content script
+                window.postMessage({
+                  type: 'KHAN_API_RESPONSE',
+                  url: urlStr,
+                  data: json
+                }, '*');
+              } catch (e) {
+                console.error('Error cloning response:', e);
+              }
+            }
+            return res;
+          });
+        };
+        
+        // Also intercept XMLHttpRequest
+        const originalXHR = window.XMLHttpRequest.prototype.open;
+        window.XMLHttpRequest.prototype.open = function(method, url) {
+          this._url = url;
+          this.addEventListener('load', function() {
+            if (this._url && (this._url.includes('getAssessmentItem') || 
+                             this._url.includes('graphql'))) {
+              try {
+                const data = JSON.parse(this.responseText);
+                window.postMessage({
+                  type: 'KHAN_API_RESPONSE',
+                  url: this._url,
+                  data: data
+                }, '*');
+              } catch (e) {}
+            }
+          });
+          return originalXHR.apply(this, arguments);
+        };
+      })();
+    `;
+    
+    (document.head || document.documentElement).appendChild(script);
+    script.remove();
+    
+    // Listen for messages from the injected script
+    window.addEventListener('message', (event) => {
+      if (event.data && event.data.type === 'KHAN_API_RESPONSE') {
+        console.log('📦 Received Khan API data from page context');
+        
+        const json = event.data.data;
+        
+        // Try to extract question data
+        let question = null;
+        
+        if (json.data?.assessmentItem?.item?.itemData) {
+          try {
+            const itemData = JSON.parse(json.data.assessmentItem.item.itemData);
+            question = itemData.question;
+            console.log('✅ Found question via assessmentItem path');
+          } catch (e) {
+            console.log('Error parsing itemData:', e);
+          }
+        }
+        
+        if (question) {
+          khanAnswers = extractKhanAnswers(question);
+          console.log('📚 Extracted Khan Academy answers:', khanAnswers);
+          
+          // Store in chrome storage for persistence
+          chrome.storage.local.set({ 
+            khanAnswers: khanAnswers,
+            khanAnswersTimestamp: Date.now()
+          });
+        }
+      }
+    });
+    
+    console.log('🎓 Khan Academy API interception setup complete');
+    
+    // Intercept fetch requests with arguments capture
     const originalFetch = window.fetch;
-    window.fetch = function() {
-      return originalFetch.apply(this, arguments).then(async (res) => {
-        console.log('📡 Fetch intercepted:', res.url);
+    window.fetch = function(...args) {
+      const [url, options] = args;
+      const urlStr = typeof url === 'string' ? url : url.toString();
+      
+      return originalFetch.apply(this, args).then(async (res) => {
+        // Log ALL fetch calls for debugging
+        if (urlStr.includes("khanacademy.org")) {
+          console.log('📡 Fetch intercepted:', urlStr);
+        }
+        
         // More comprehensive URL matching for Khan Academy API endpoints
-        if (res.url.includes("khanacademy.org") && 
-            (res.url.includes("/getAssessmentItem") || 
-             res.url.includes("/graphql") || 
-             res.url.includes("/api/internal") ||
-             res.url.includes("/perseus-data") ||
-             res.url.includes("/assessment") ||
-             res.url.includes("_render"))) {
+        if ((urlStr.includes("getAssessmentItem") || 
+             urlStr.includes("/graphql") || 
+             urlStr.includes("/api/internal") ||
+             urlStr.includes("/perseus-data") ||
+             urlStr.includes("/assessment") ||
+             urlStr.includes("_getAssessmentItem") ||
+             urlStr.includes("/api/v1") ||
+             res.url.includes("getAssessmentItem"))) {
           console.log('🎯 Khan Academy API call detected:', res.url);
           const clone = res.clone();
           try {
@@ -102,12 +209,14 @@ console.log('AI Form Solver: Loading extension...');
       };
       
       xhr.send = function() {
+        const originalThis = this;
         this.addEventListener('load', function() {
-          console.log('📡 XHR intercepted:', this._url);
-          if (this._url && this._url.includes("khanacademy.org") &&
-              (this._url.includes("/getAssessmentItem") || 
-               this._url.includes("/graphql") || 
-               this._url.includes("/api/internal"))) {
+          console.log('📡 XHR intercepted:', originalThis._url);
+          if (originalThis._url && 
+              (originalThis._url.includes("/getAssessmentItem") || 
+               originalThis._url.includes("/graphql") || 
+               originalThis._url.includes("/api/internal") ||
+               originalThis._url.includes("_getAssessmentItem"))) {
             console.log('🎯 Khan Academy XHR API call detected');
             try {
               const json = JSON.parse(this.responseText);
@@ -156,16 +265,29 @@ console.log('AI Form Solver: Loading extension...');
         case "input-number":
           // Free response answers
           if (widget.options?.answers) {
-            answer = widget.options.answers
+            // Get ALL correct answers, not just the first one
+            const correctAnswers = widget.options.answers
               .filter(a => a.status === "correct")
               .map(a => a.value);
-            console.log(`🎯 Numeric input answers:`, answer);
+            // For multi-field problems, each answer goes to a separate field
+            correctAnswers.forEach(val => {
+              answers.push({
+                type: widgetType,
+                answer: val,
+                widgetName: widgetName
+              });
+            });
+            console.log(`🎯 Numeric input answers for ${widgetName}:`, correctAnswers);
           } else if (widget.options?.value !== undefined) {
-            answer = [widget.options.value];
-            console.log(`🎯 Numeric input value:`, answer);
+            answers.push({
+              type: widgetType,
+              answer: widget.options.value,
+              widgetName: widgetName
+            });
+            console.log(`🎯 Numeric input value for ${widgetName}:`, widget.options.value);
           }
           // Log all widget options for debugging
-          console.log(`📋 All numeric-input options:`, widget.options);
+          console.log(`📋 All numeric-input options for ${widgetName}:`, widget.options);
           break;
           
         case "radio":
