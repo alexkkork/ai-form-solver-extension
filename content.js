@@ -529,10 +529,135 @@ console.log('AI Form Solver: Loading extension...');
       }
     });
     
+    // 4. Dropdown/Select Fields (Perseus Dropdown Widget)
+    const dropdownSelectors = [
+      '.perseus-widget-dropdown select',
+      '.perseus-widget select',
+      '.perseus-select',
+      'select[aria-label*="answer" i]',
+      '.task-container select'
+    ];
+    
+    const processedDropdowns = new Set();
+    dropdownSelectors.forEach(selector => {
+      try {
+        const selects = document.querySelectorAll(selector);
+        selects.forEach((select, index) => {
+          if (!processedDropdowns.has(select) && !select.disabled && isElementVisible(select)) {
+            processedDropdowns.add(select);
+            
+            let questionText = '';
+            const widgetContainer = select.closest('.perseus-widget, .perseus-widget-container');
+            if (widgetContainer) {
+              const questionEl = widgetContainer.querySelector('.perseus-renderer > p, .paragraph');
+              if (questionEl) {
+                questionText = questionEl.textContent.trim();
+              }
+            }
+            
+            const options = Array.from(select.options).map(opt => opt.textContent.trim());
+            
+            khanFields.push({
+              element: select,
+              type: 'khan-dropdown',
+              label: questionText || `Dropdown ${khanFields.filter(f => f.type === 'khan-dropdown').length + 1}`,
+              id: select.id || `khan_dropdown_${index}`,
+              options: options,
+              khanAcademy: true,
+              required: true,
+              widgetType: 'perseus-dropdown'
+            });
+          }
+        });
+      } catch (e) {
+        console.log('Error with dropdown selector:', selector, e);
+      }
+    });
+    
+    // 5. Interactive/Special Widgets (Card arrangement, Drag & Drop, etc)
+    const interactiveWidgetSelectors = [
+      // Card arrangement widgets
+      '.perseus-widget-orderer',
+      '.perseus-widget-sorter',
+      '.card-container',
+      '[class*="sortable"]',
+      '[class*="draggable"]',
+      // Number line widgets
+      '.perseus-widget-number-line',
+      '.number-line-container',
+      // Graph/Drawing widgets
+      '.perseus-widget-interactive-graph',
+      '.perseus-widget-plotter',
+      '.graphie-container',
+      // Matrix widgets
+      '.perseus-widget-matrix',
+      '.matrix-input',
+      // Table widgets
+      '.perseus-widget-table',
+      '.table-input',
+      // Categorizer widgets
+      '.perseus-widget-categorizer',
+      // Matcher widgets
+      '.perseus-widget-matcher'
+    ];
+    
+    interactiveWidgetSelectors.forEach(selector => {
+      try {
+        const widgets = document.querySelectorAll(selector);
+        widgets.forEach((widget, index) => {
+          if (isElementVisible(widget)) {
+            let questionText = '';
+            let widgetType = 'unknown';
+            
+            // Identify widget type from class
+            const classList = widget.className;
+            if (classList.includes('orderer') || classList.includes('sorter') || classList.includes('card')) {
+              widgetType = 'card-arrangement';
+            } else if (classList.includes('number-line')) {
+              widgetType = 'number-line';
+            } else if (classList.includes('graph') || classList.includes('plotter')) {
+              widgetType = 'graph';
+            } else if (classList.includes('matrix')) {
+              widgetType = 'matrix';
+            } else if (classList.includes('table')) {
+              widgetType = 'table';
+            } else if (classList.includes('categorizer')) {
+              widgetType = 'categorizer';
+            } else if (classList.includes('matcher')) {
+              widgetType = 'matcher';
+            }
+            
+            // Find question text
+            const container = widget.closest('.perseus-widget-container, .task-container');
+            if (container) {
+              const questionEl = container.querySelector('.perseus-renderer > p, .paragraph, [class*="question"]');
+              if (questionEl) {
+                questionText = questionEl.textContent.trim();
+              }
+            }
+            
+            khanFields.push({
+              element: widget,
+              type: 'khan-interactive',
+              label: questionText || `Interactive Widget (${widgetType})`,
+              id: `khan_interactive_${widgetType}_${index}`,
+              widgetType: widgetType,
+              khanAcademy: true,
+              required: true
+            });
+          }
+        });
+      } catch (e) {
+        console.log('Error with interactive widget selector:', selector, e);
+      }
+    });
+    
     console.log(`🎓 Found ${khanFields.length} Khan Academy Perseus fields:`, {
       math: khanFields.filter(f => f.type === 'khan-math-input').length,
       multipleChoice: khanFields.filter(f => f.type === 'khan-multiple-choice').length,
-      textResponse: khanFields.filter(f => f.type === 'khan-text-response').length
+      textResponse: khanFields.filter(f => f.type === 'khan-text-response').length,
+      dropdown: khanFields.filter(f => f.type === 'khan-dropdown').length,
+      interactive: khanFields.filter(f => f.type === 'khan-interactive').length
     });
     
     return khanFields;
@@ -1763,11 +1888,41 @@ SCIENTIFIC NOTATION & POWERS OF 10:
   - 45.6 × 10³ = 45.6 × 1000 = 45600
   - 123.4 × 10⁻² = 123.4 × 0.01 = 1.234
 
-CARD ARRANGEMENT PROBLEMS:
-- If asked to "arrange cards to show the solution", calculate the answer first
-- Then provide the digits in the correct order
-- Example: "Arrange cards to show 59.303 × 10²" → Calculate: 5930.3 → Answer: "5 9 3 0 . 3"
-- Example: "Arrange cards to show 4.56 × 10³" → Calculate: 4560 → Answer: "4 5 6 0"
+KHAN ACADEMY INTERACTIVE WIDGET TYPES:
+
+1. CARD ARRANGEMENT PROBLEMS:
+   - Calculate the answer first, then arrange digits/cards
+   - Example: "Arrange cards to show 59.303 × 10²" → Calculate: 5930.3 → Answer: "5 9 3 0 . 3"
+   - Example: "Arrange cards to show 4.56 × 10³" → Calculate: 4560 → Answer: "4 5 6 0"
+   - For fraction arrangements: "Show 3/4" → Answer: "3 / 4"
+
+2. NUMBER LINE PROBLEMS:
+   - Place points at correct positions
+   - Example: "Mark 3.5 on the number line" → Answer: "3.5"
+   - Example: "Show -2 and 4" → Answer: "-2, 4"
+
+3. DROPDOWN/SELECT PROBLEMS:
+   - Choose the best matching option from the list
+   - Match exactly if possible, otherwise find closest meaning
+
+4. TABLE/MATRIX PROBLEMS:
+   - Fill cells with calculated values
+   - Provide answers in row-by-row order
+   - Example: "Fill 2×2 matrix" → Answer: "1, 2, 3, 4" (for cells in order)
+
+5. GRAPH/PLOTTING PROBLEMS:
+   - Provide coordinates as (x, y) pairs
+   - Example: "Plot the point at (3, 4)" → Answer: "(3, 4)"
+   - For multiple points: "(1, 2), (3, 4), (5, 6)"
+
+6. CATEGORIZER PROBLEMS:
+   - Sort items into correct categories
+   - Provide as "Item: Category" pairs
+
+7. ORDERING/SORTING PROBLEMS:
+   - Arrange items in correct sequence
+   - Provide items in order separated by commas
+   - Example: "Order from smallest to largest: 3.2, 1/2, 0.75" → Answer: "1/2, 0.75, 3.2"
 
 COMMON MISTAKES TO AVOID:
 - DO NOT give 21/28 when answer should be 21/4 (always simplify)
@@ -2435,6 +2590,60 @@ Example: [{"label": "Name", "value": "Alex Johnson"}, {"label": "Email", "value"
         }
         
         textarea.blur();
+        break;
+        
+      case 'khan-dropdown':
+        // Handle dropdown selection
+        const select = field.element;
+        const optionToSelect = field.options.find(opt => 
+          opt.toLowerCase().includes(value.toLowerCase()) ||
+          value.toLowerCase().includes(opt.toLowerCase())
+        );
+        
+        if (optionToSelect) {
+          select.value = optionToSelect;
+          select.dispatchEvent(new Event('change', { bubbles: true }));
+          console.log(`✅ Selected dropdown option: ${optionToSelect}`);
+        } else {
+          console.log(`⚠️ No matching dropdown option found for: ${value}`);
+        }
+        break;
+        
+      case 'khan-interactive':
+        // Handle interactive widgets based on widget type
+        console.log(`🎮 Interactive widget type: ${field.widgetType}`);
+        console.log(`💡 Answer provided: ${value}`);
+        
+        // For now, log the interaction - specific widget handling would need 
+        // to be implemented based on Khan Academy's API
+        switch (field.widgetType) {
+          case 'card-arrangement':
+            console.log('📋 Card arrangement: Need to drag cards to positions:', value);
+            break;
+          case 'number-line':
+            console.log('📏 Number line: Need to place points at:', value);
+            break;
+          case 'graph':
+            console.log('📊 Graph: Need to plot points at:', value);
+            break;
+          case 'matrix':
+            console.log('🔢 Matrix: Need to fill cells with:', value);
+            break;
+          case 'table':
+            console.log('📋 Table: Need to fill cells with:', value);
+            break;
+          case 'categorizer':
+            console.log('📂 Categorizer: Need to sort items:', value);
+            break;
+          case 'matcher':
+            console.log('🔗 Matcher: Need to match items:', value);
+            break;
+          default:
+            console.log(`❓ Unknown interactive widget type: ${field.widgetType}`);
+        }
+        
+        // Show notification that interactive widgets need manual interaction
+        showNotification('Interactive widget detected - may require manual interaction', 'info');
         break;
     }
     
