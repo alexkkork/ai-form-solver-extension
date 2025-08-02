@@ -577,26 +577,19 @@ console.log('AI Form Solver: Loading extension...');
     Object.keys(radioGroups).forEach((groupName, index) => {
       const group = radioGroups[groupName];
       if (group.elements.length > 0) {
-        // Find question text
+        // Find question text - look for the main question container first
         let questionText = '';
         
-        // Look for Perseus widget container
-        const widgetContainer = group.elements[0].closest('.perseus-widget, .perseus-widget-container');
-        if (widgetContainer) {
-          const questionEl = widgetContainer.querySelector('.perseus-renderer > p, .paragraph, [class*="paragraph"]:not(label)');
-          if (questionEl) {
-            questionText = questionEl.textContent.trim();
-          }
-        }
-        
-        // Look in task container
-        if (!questionText) {
-          const taskContainer = group.elements[0].closest('.task-container, .assessment-item-container');
-          if (taskContainer) {
-            const paragraphs = taskContainer.querySelectorAll('p:not(:has(input)):not(label p)');
-            for (const p of paragraphs) {
+        // Look for the main question text in parent containers
+        const taskContainer = group.elements[0].closest('.task-container, .assessment-item-container, .perseus-renderer');
+        if (taskContainer) {
+          // Find the first paragraph that contains the question (not inside labels)
+          const paragraphs = taskContainer.querySelectorAll('p');
+          for (const p of paragraphs) {
+            // Skip paragraphs that are inside labels or choice containers
+            if (!p.closest('label') && !p.closest('.radio-choice')) {
               const text = p.textContent.trim();
-              if (text.length > 10 && !text.includes('Option')) {
+              if (text.length > 10 && (text.includes('?') || text.includes('Choose') || text.includes('Select') || text.includes('What') || text.includes('Which'))) {
                 questionText = text;
                 break;
               }
@@ -604,10 +597,11 @@ console.log('AI Form Solver: Loading extension...');
           }
         }
         
+        // Only add one field per radio group
         khanFields.push({
           element: group.elements[0].closest('.perseus-widget') || group.elements[0].parentElement,
           type: 'khan-multiple-choice',
-          label: questionText || `Multiple Choice Question ${index + 1}`,
+          label: questionText || `Multiple Choice Question ${khanFields.filter(f => f.type === 'khan-multiple-choice').length + 1}`,
           id: `khan_mc_${index}`,
           groupName: groupName,
           options: group.options,
@@ -2099,7 +2093,14 @@ For each field, provide an appropriate response following these guidelines:
 - Radio buttons: Select ONE option (just the text, not the letter)
 - Checkboxes: Select appropriate options (as an array)
 - For questions with factual answers, provide the correct answer
-- For open-ended questions, provide brief, relevant responses`;
+- For open-ended questions, provide brief, relevant responses
+
+CRITICAL FOR MULTIPLE CHOICE QUESTIONS:
+- When a field has "options" provided, you MUST select from those exact options
+- DO NOT calculate the answer and return a number for multiple choice
+- Look at the field's "options" array and select the matching option
+- For fraction problems with multiple choice, select the expression that equals the answer
+- Example: If asked "What expression can be used to add 3/4 + 1/6?" and options are fraction expressions, select the correct expression option, NOT "11/12"`;
 
     // Add special volume problem instructions if detected
     if (isVolumeProblem) {
