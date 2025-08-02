@@ -337,14 +337,19 @@ console.log('AI Form Solver: Loading extension...');
               }
             }
             
+            // Add unique identifier to help with field matching
+            const fieldId = `khan_math_${index}_${Date.now()}`;
+            
             khanFields.push({
               element: input,
               type: 'khan-math-input',
               label: questionText || `Math Answer ${khanFields.filter(f => f.type === 'khan-math-input').length + 1}`,
-              id: input.id || `khan_math_${index}`,
+              id: input.id || fieldId,
+              uniqueId: fieldId,
               khanAcademy: true,
               required: true,
-              widgetType: 'perseus-numeric-input'
+              widgetType: 'perseus-numeric-input',
+              questionText: questionText  // Store original question text
             });
           }
         });
@@ -1693,27 +1698,60 @@ For each field, provide an appropriate response following these guidelines:
 - For questions with factual answers, provide the correct answer
 - For open-ended questions, provide brief, relevant responses
 
-SPECIAL INSTRUCTIONS FOR MATH PROBLEMS:
-- If a field contains a math problem (like "3 3/4 ÷ 5/7" or "Divide. Write the quotient in lowest terms"):
-  
-  STEP-BY-STEP PROCESS:
-  1. Convert ALL numbers to fractions first:
-     - Whole numbers: 5 = 5/1
-     - Mixed numbers: 3 1/3 = (3×3+1)/3 = 10/3
-  2. For division: a/b ÷ c/d = a/b × d/c (flip and multiply)
-  3. Multiply: (a×d)/(b×c)
-  4. Simplify by finding GCD and dividing both numerator and denominator
-  5. For Khan Academy: use improper fraction format without spaces (e.g., "3/2" not "3 / 2")
-  
-CRITICAL: When you see "5 ÷ 3 1/3", this means:
-- Convert: 5 = 5/1 and 3 1/3 = 10/3
-- Calculate: 5/1 ÷ 10/3 = 5/1 × 3/10 = 15/10 = 3/2
+SPECIAL INSTRUCTIONS FOR KHAN ACADEMY MATH PROBLEMS:
 
-More examples:
-- 3 3/4 ÷ 5/7 = 15/4 ÷ 5/7 = 15/4 × 7/5 = 105/20 = 21/4
+CRITICAL: For Khan Academy math problems, follow these steps EXACTLY:
+
+1. IDENTIFY THE PROBLEM TYPE:
+   - Division (÷)
+   - Multiplication (×)
+   - Addition (+)
+   - Subtraction (-)
+   - Fractions, decimals, percentages
+   - Word problems
+   - Algebra equations
+
+2. CONVERSION RULES:
+   - Whole numbers: 5 = 5/1
+   - Mixed numbers: 3 1/3 = (3×3+1)/3 = 10/3
+   - Mixed numbers: 5 3/4 = (5×4+3)/4 = 23/4
+   - Decimals to fractions: 0.5 = 1/2, 0.25 = 1/4, 0.75 = 3/4
+
+3. OPERATION RULES:
+   - Division: a/b ÷ c/d = a/b × d/c (invert and multiply)
+   - Multiplication: a/b × c/d = (a×c)/(b×d)
+   - Addition: a/b + c/d = (a×d + b×c)/(b×d), then simplify
+   - Subtraction: a/b - c/d = (a×d - b×c)/(b×d), then simplify
+
+4. SIMPLIFICATION:
+   - Find GCD of numerator and denominator
+   - Divide both by GCD
+   - Examples: 15/10 = 3/2, 105/20 = 21/4, 14/5 stays as 14/5
+
+5. ANSWER FORMAT FOR KHAN ACADEMY:
+   - Use improper fractions: "21/4" not "5 1/4"
+   - NO spaces in fractions: "3/2" not "3 / 2"
+   - Simplify to lowest terms ALWAYS
+   - For whole numbers: just the number "5" not "5/1"
+
+DETAILED EXAMPLES:
 - 5 ÷ 3 1/3 = 5/1 ÷ 10/3 = 5/1 × 3/10 = 15/10 = 3/2
+- 3 3/4 ÷ 5/7 = 15/4 ÷ 5/7 = 15/4 × 7/5 = 105/20 = 21/4
 - 2/3 × 3/4 = 6/12 = 1/2
 - 7 ÷ 2 1/2 = 7/1 ÷ 5/2 = 7/1 × 2/5 = 14/5
+- 4 2/3 + 1 1/2 = 14/3 + 3/2 = 28/6 + 9/6 = 37/6
+- 5 - 2 3/4 = 20/4 - 11/4 = 9/4
+
+WORD PROBLEM SOLVING:
+- Extract the numbers and operation
+- Set up the equation
+- Solve step by step
+- Check if answer makes sense
+
+COMMON MISTAKES TO AVOID:
+- DO NOT give 21/28 when answer should be 21/4 (always simplify)
+- DO NOT give 5/3 when answer should be 3/2 (check your multiplication)
+- DO NOT mix up numerator and denominator when inverting for division
 
 RESPONSE FORMAT:
 Return ONLY a valid JSON array. Each object must have:
@@ -1797,35 +1835,78 @@ Example: [{"label": "Name", "value": "Alex Johnson"}, {"label": "Email", "value"
     if (isKhanAcademy()) {
       console.log('🎓 Khan Academy detected - using Perseus framework form handling');
       
-      // For Khan Academy, we need to be more careful about field matching
+      // For Khan Academy, we need to match fields more precisely
+      console.log('🎓 Khan Academy field matching - Fields:', fields.map(f => ({type: f.type, label: f.label})));
+      console.log('🎓 Khan Academy field matching - Responses:', aiResponses.map(r => ({label: r.label, value: r.value})));
+      
+      // Create a map of fields by type for better organization
+      const fieldsByType = {
+        'khan-math-input': fields.filter(f => f.type === 'khan-math-input'),
+        'khan-multiple-choice': fields.filter(f => f.type === 'khan-multiple-choice'),
+        'khan-text-response': fields.filter(f => f.type === 'khan-text-response')
+      };
+      
+      // Try to match responses to fields more accurately
+      const matchedFields = new Set();
+      
       for (const response of aiResponses) {
         try {
-          // Find matching field with more flexible matching
-          const field = fields.find(f => {
-            const fieldLabel = f.label.toLowerCase().trim();
-            const responseLabel = response.label.toLowerCase().trim();
-            
-            // Try various matching strategies
-            return fieldLabel === responseLabel ||
-                   fieldLabel.includes(responseLabel) ||
-                   responseLabel.includes(fieldLabel) ||
-                   // Match partial question text
-                   (fieldLabel.length > 20 && responseLabel.length > 20 && 
-                    (fieldLabel.includes(responseLabel.substring(0, 20)) ||
-                     responseLabel.includes(fieldLabel.substring(0, 20)))) ||
-                   // Match by field type if labels are generic
-                   (f.type === 'khan-math-input' && response.label.includes('Math')) ||
-                   (f.type === 'khan-multiple-choice' && response.label.includes('Choice')) ||
-                   (f.type === 'khan-text-response' && response.label.includes('Text'));
-          });
+          let matchedField = null;
+          const responseLabel = response.label.toLowerCase().trim();
           
-          if (!field) {
+          // First try exact match
+          matchedField = fields.find(f => 
+            !matchedFields.has(f) && 
+            f.label.toLowerCase().trim() === responseLabel
+          );
+          
+          // If no exact match, try to match by question content
+          if (!matchedField) {
+            // For math problems, look for fields that contain key parts of the question
+            if (responseLabel.includes('÷') || responseLabel.includes('×') || responseLabel.includes('+') || 
+                responseLabel.includes('-') || responseLabel.includes('=')) {
+              // This is likely a math problem
+              matchedField = fieldsByType['khan-math-input'].find(f => {
+                if (matchedFields.has(f)) return false;
+                const fieldLabel = f.label.toLowerCase();
+                // Check if key numbers/operations from response appear in field
+                const responseNumbers = responseLabel.match(/\d+/g) || [];
+                const fieldNumbers = fieldLabel.match(/\d+/g) || [];
+                return responseNumbers.some(num => fieldNumbers.includes(num));
+              });
+            }
+          }
+          
+          // If still no match, try substring matching with higher threshold
+          if (!matchedField) {
+            matchedField = fields.find(f => {
+              if (matchedFields.has(f)) return false;
+              const fieldLabel = f.label.toLowerCase().trim();
+              // Require at least 50% overlap in content
+              const minLength = Math.min(fieldLabel.length, responseLabel.length);
+              const overlap = fieldLabel.split(' ').filter(word => responseLabel.includes(word)).join(' ').length;
+              return overlap > minLength * 0.5;
+            });
+          }
+          
+          // Last resort: match by position/index for same type
+          if (!matchedField && response.label.includes('Math Answer')) {
+            const mathIndex = parseInt(response.label.match(/\d+/)?.[0] || '1') - 1;
+            if (fieldsByType['khan-math-input'][mathIndex]) {
+              matchedField = fieldsByType['khan-math-input'][mathIndex];
+            }
+          }
+          
+          if (!matchedField) {
             console.log(`⚠️ No matching Khan Academy field found for: ${response.label}`);
             continue;
           }
           
-          console.log(`✏️ Filling Khan Academy ${field.type}: ${field.label} with value: ${response.value}`);
-          await fillKhanAcademyField(field, response.value);
+          matchedFields.add(matchedField);
+          console.log(`✏️ Matched: "${response.label}" → "${matchedField.label}" (${matchedField.type})`);
+          console.log(`✏️ Filling with value: ${response.value}`);
+          
+          await fillKhanAcademyField(matchedField, response.value);
           
           // Khan Academy Perseus widgets need time to process
           await new Promise(resolve => setTimeout(resolve, 700));
