@@ -1290,7 +1290,10 @@ console.log('AI Form Solver: Loading extension...');
                 // Find the radio widget answer
                 const radioAnswer = khanAnswers.find(a => a.type === 'radio');
                 if (radioAnswer && radioAnswer.answer) {
-                  console.log(`📝 Mapping radio answer: ${radioAnswer.answer} to field: ${field.label}`);
+                  console.log(`📝 Mapping radio answer to field: ${field.label}`);
+                  console.log(`📌 Answer value:`, radioAnswer.answer);
+                  console.log(`📌 Answer type:`, typeof radioAnswer.answer);
+                  console.log(`📌 Available options:`, field.options);
                   aiResponse.push({
                     label: field.label,
                     value: radioAnswer.answer
@@ -2917,24 +2920,31 @@ Example: [{"label": "Name", "value": "Alex Johnson"}, {"label": "Email", "value"
               radio.focus();
               await new Promise(resolve => setTimeout(resolve, 100));
               
-              // Set checked programmatically
-              radio.checked = true;
+              // IMPORTANT: Don't set checked=true here, let the click do it
+              // This was causing the bug where last option was always selected
               
-              // Trigger React-compatible events
-              const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'checked').set;
-              nativeInputValueSetter.call(radio, true);
-              
-              // Fire events that React/Perseus listens to
-              const changeEvent = new Event('change', { bubbles: true, cancelable: true });
-              const clickEvent = new Event('click', { bubbles: true, cancelable: true });
-              const inputEvent = new Event('input', { bubbles: true, cancelable: true });
-              
-              radio.dispatchEvent(inputEvent);
-              radio.dispatchEvent(changeEvent);
-              radio.dispatchEvent(clickEvent);
-              
-              // Also try clicking the radio directly
+              // Just click the radio - this is the proper way
               radio.click();
+              await new Promise(resolve => setTimeout(resolve, 100));
+              
+              // If click didn't work, try the React-compatible approach
+              if (!radio.checked) {
+                // Set checked programmatically
+                radio.checked = true;
+                
+                // Trigger React-compatible events
+                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'checked').set;
+                nativeInputValueSetter.call(radio, true);
+                
+                // Fire events that React/Perseus listens to
+                const changeEvent = new Event('change', { bubbles: true, cancelable: true });
+                const clickEvent = new Event('click', { bubbles: true, cancelable: true });
+                const inputEvent = new Event('input', { bubbles: true, cancelable: true });
+                
+                radio.dispatchEvent(inputEvent);
+                radio.dispatchEvent(changeEvent);
+                radio.dispatchEvent(clickEvent);
+              }
             }
             
             // 4. Verify selection worked
