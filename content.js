@@ -1875,6 +1875,17 @@ WORD PROBLEM SOLVING:
 - Solve step by step
 - Check if answer makes sense
 
+FRACTION COMPARISON & SUBTRACTION PROBLEMS:
+- When comparing two fractions, find which is larger
+- To find "how much longer/more", subtract smaller from larger
+- ALWAYS convert to common denominator first
+- Example: "T-rex tooth is 7/12 ft, crocodile tooth is 1/4 ft. How much longer?"
+  - Convert 1/4 to twelfths: 1/4 = 3/12
+  - Expression needed: 7/12 - 3/12 (NOT 7/12 - 1/4 or 7/12 - 1/12)
+- Example: "Compare 5/6 and 2/3"
+  - Convert to common denominator: 5/6 vs 4/6
+  - 5/6 - 4/6 = 1/6 difference
+
 SCIENTIFIC NOTATION & POWERS OF 10:
 - 10¹ = 10
 - 10² = 100
@@ -1929,6 +1940,9 @@ COMMON MISTAKES TO AVOID:
 - DO NOT give 5/3 when answer should be 3/2 (check your multiplication)
 - DO NOT mix up numerator and denominator when inverting for division
 - DO NOT misplace decimal points in scientific notation (59.303 × 10² = 5930.3, NOT 309.53)
+- DO NOT subtract fractions without converting to common denominator first
+- When asked for "expression to find difference", give the subtraction expression, not the answer
+- CRITICAL: 1/4 = 3/12, NOT 1/12. Always convert fractions correctly!
 
 RESPONSE FORMAT:
 Return ONLY a valid JSON array. Each object must have:
