@@ -100,11 +100,13 @@ console.log('AI Form Solver: Loading extension...');
             answer = widget.options.answers
               .filter(a => a.status === "correct")
               .map(a => a.value);
-          } else if (widget.options?.inexact === false) {
-            answer = [widget.options.value];
+            console.log(`🎯 Numeric input answers:`, answer);
           } else if (widget.options?.value !== undefined) {
             answer = [widget.options.value];
+            console.log(`🎯 Numeric input value:`, answer);
           }
+          // Log all widget options for debugging
+          console.log(`📋 All numeric-input options:`, widget.options);
           break;
           
         case "radio":
@@ -1284,6 +1286,10 @@ console.log('AI Form Solver: Loading extension...');
             // Convert extracted answers to AI response format
             aiResponse = [];
             
+            // Debug: Show all extracted answers
+            console.log('🔍 All extracted Khan answers:', khanAnswers);
+            console.log('🔍 Fields to fill:', fields.map(f => ({ type: f.type, label: f.label })));
+            
             // For multiple choice questions, find the correct answer from API
             fields.forEach(field => {
               if (field.type === 'khan-multiple-choice') {
@@ -1305,11 +1311,16 @@ console.log('AI Form Solver: Loading extension...');
                   a.type === 'numeric-input' || a.type === 'input-number'
                 );
                 if (numericAnswer && numericAnswer.answer) {
-                  console.log(`📝 Mapping numeric answer: ${numericAnswer.answer} to field: ${field.label}`);
+                  console.log(`📝 Mapping numeric answer to field: ${field.label}`);
+                  console.log(`📌 Answer value:`, numericAnswer.answer);
+                  console.log(`📌 Answer type:`, typeof numericAnswer.answer);
+                  console.log(`📌 Raw answer object:`, numericAnswer);
                   aiResponse.push({
                     label: field.label,
                     value: numericAnswer.answer
                   });
+                } else {
+                  console.log(`⚠️ No numeric answer found for math input field: ${field.label}`);
                 }
               }
             });
