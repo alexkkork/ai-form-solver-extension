@@ -1104,6 +1104,49 @@ console.log('AI Form Solver: Loading extension...');
         if (window.location.hostname.includes('khanacademy.org')) {
           console.log('🎓 Khan Academy detected - looking for Check Answer button...');
           
+          // Check if there are any pending interactive widgets
+          const pendingInteractive = document.querySelector('[data-ai-interactive-pending="true"]');
+          if (pendingInteractive) {
+            console.log('⏳ Interactive widget pending - waiting for user to complete...');
+            
+            // Set up observer to watch for Done button
+            const observer = new MutationObserver(async (mutations) => {
+              // Find Done button by text content or aria-label
+              let doneButton = null;
+              const buttons = document.querySelectorAll('button');
+              for (const btn of buttons) {
+                const text = btn.textContent?.toLowerCase() || '';
+                const ariaLabel = btn.getAttribute('aria-label')?.toLowerCase() || '';
+                if ((text.includes('done') || ariaLabel.includes('done')) && !btn.disabled) {
+                  doneButton = btn;
+                  break;
+                }
+              }
+              if (doneButton && !doneButton.disabled) {
+                observer.disconnect();
+                
+                showNotification('✅ Interactive task completed! Continuing...', 'success');
+                pendingInteractive.removeAttribute('data-ai-interactive-pending');
+                
+                // Click done button
+                doneButton.click();
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                // Continue with check answer flow
+                const checkButton = await findKhanCheckButton();
+                if (checkButton) {
+                  checkButton.click();
+                }
+              }
+            });
+            
+            observer.observe(document.body, { childList: true, subtree: true });
+            
+            // Don't continue to next page yet
+            continueToNextPage = false;
+            continue;
+          }
+          
           // Look for Check Answer button
           const checkButton = await findKhanCheckButton();
           if (checkButton) {
@@ -1899,6 +1942,13 @@ SCIENTIFIC NOTATION & POWERS OF 10:
   - 45.6 × 10³ = 45.6 × 1000 = 45600
   - 123.4 × 10⁻² = 123.4 × 0.01 = 1.234
 
+VOLUME CALCULATION PROBLEMS:
+- Count ALL visible unit cubes from both views
+- Front view shows some cubes, back view may show additional hidden cubes
+- Add cubes from all layers: front layer + middle layers + back layer
+- Example: If front shows 4 cubes and back shows 2 more hidden cubes → Total = 6
+- For complex shapes, count layer by layer systematically
+
 KHAN ACADEMY INTERACTIVE WIDGET TYPES:
 
 1. CARD ARRANGEMENT PROBLEMS:
@@ -1906,6 +1956,7 @@ KHAN ACADEMY INTERACTIVE WIDGET TYPES:
    - Example: "Arrange cards to show 59.303 × 10²" → Calculate: 5930.3 → Answer: "5 9 3 0 . 3"
    - Example: "Arrange cards to show 4.56 × 10³" → Calculate: 4560 → Answer: "4 5 6 0"
    - For fraction arrangements: "Show 3/4" → Answer: "3 / 4"
+   - USER INSTRUCTION: "Please arrange the cards to show: [answer]"
 
 2. NUMBER LINE PROBLEMS:
    - Place points at correct positions
@@ -2656,8 +2707,42 @@ Example: [{"label": "Name", "value": "Alex Johnson"}, {"label": "Email", "value"
             console.log(`❓ Unknown interactive widget type: ${field.widgetType}`);
         }
         
-        // Show notification that interactive widgets need manual interaction
-        showNotification('Interactive widget detected - may require manual interaction', 'info');
+        // Show detailed instructions for interactive widgets
+        let userInstruction = '';
+        switch (field.widgetType) {
+          case 'card-arrangement':
+            userInstruction = `📋 Please arrange the cards to show: ${value}\nThen click the "Done" or "Check" button.`;
+            break;
+          case 'number-line':
+            userInstruction = `📏 Please place points on the number line at: ${value}\nThen click "Done".`;
+            break;
+          case 'graph':
+            userInstruction = `📊 Please plot points at: ${value}\nThen click "Done".`;
+            break;
+          case 'matrix':
+            userInstruction = `🔢 Please fill the matrix cells with: ${value}\n(Enter values row by row)`;
+            break;
+          case 'table':
+            userInstruction = `📋 Please fill the table cells with: ${value}`;
+            break;
+          case 'categorizer':
+            userInstruction = `📂 Please sort items as follows: ${value}`;
+            break;
+          case 'matcher':
+            userInstruction = `🔗 Please match items: ${value}`;
+            break;
+          default:
+            userInstruction = `Interactive widget: ${value}`;
+        }
+        
+        showNotification(userInstruction, 'info', 10000); // Show for 10 seconds
+        
+        // Mark this widget as needing manual completion
+        field.element.setAttribute('data-ai-interactive-pending', 'true');
+        field.element.setAttribute('data-ai-answer', value);
+        
+        // After showing instructions, wait for user to complete the interactive task
+        console.log('⏳ Waiting for user to complete interactive widget...');
         break;
     }
     
