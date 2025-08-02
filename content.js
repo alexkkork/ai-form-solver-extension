@@ -989,6 +989,13 @@ console.log('AI Form Solver: Loading extension...');
             return;
           }
           
+          // Skip radio buttons on Khan Academy that are part of Perseus widgets
+          if (window.location.hostname.includes('khanacademy.org') && 
+              element.type === 'radio' &&
+              element.closest('.perseus-widget-radio')) {
+            return;
+          }
+          
           processedElements.add(element);
           
           const fieldInfo = {
